@@ -3344,11 +3344,11 @@ palet<-function(predtype,multiple=FALSE){
 
 
 selectedfeature<-function(model,modeltype,tab,validation,criterionimportance,criterionmodel,fstype="learn"){
-  # Verify binary classification only
-  if(length(levels(tab[,1])) > 2){
-    warning("Feature selection via selectedfeature() is only supported for binary classification. Skipping feature selection.")
-    return(list("dataset"=tab,"model"=model))
-  }
+  # Feature selection works for both binary and multi-class classification
+  # Note: For SVM multi-class with AUC criterion, model must be trained with probability=TRUE
+
+  # Determine if multi-class for SVM probability requirement
+  n_classes <- length(levels(tab[,1]))
 
   rmvar<-testmodel(model=model,modeltype = modeltype,tab=tab,validation=validation,
                    criterionimportance = criterionimportance,criterionmodel = criterionmodel,fstype=fstype)
@@ -3359,17 +3359,20 @@ selectedfeature<-function(model,modeltype,tab,validation,criterionimportance,cri
     print(paste(i,"eliminates features"))
     tabdiff2<-tabdiff2[,-rmvar]
     if(modeltype=="svm"){
+      # For multi-class with AUC criterion, need probability=TRUE
+      need_prob <- (criterionmodel=="auc" && n_classes > 2)
       tune_result <- tune.svm(x=tabdiff2[,-1], y=tabdiff2[,1],
                              gamma = 10^(-5:2), cost = 10^(-3:2),
-                             cross=min(dim(tabdiff2)[1]-2,10))
+                             cross=min(dim(tabdiff2)[1]-2,10),
+                             probability = need_prob)
       model <- tune_result$best.model
       model$cost <- tune_result$best.parameters$cost
       model$gamma <- tune_result$best.parameters$gamma
     }
-    if (modeltype=="randomforest"){      
+    if (modeltype=="randomforest"){
       tabdiff2<-as.data.frame(tabdiff2[,c(colnames(tabdiff2)[1],sort(colnames(tabdiff2[,-1])))])
       tabdiff2<-as.data.frame(tabdiff2[sort(rownames(tabdiff2)),])
-      
+
       set.seed(20011203)
       model <- randomForest(tabdiff2[,-1],tabdiff2[,1],ntree=1000,importance=T,keep.forest=T)
     }
@@ -3386,45 +3389,99 @@ testmodel<-function(model,modeltype,tab,validation,criterionimportance,criterion
   importancevar<-importancemodelsvm(model = model,modeltype=modeltype,tabdiff=tab,criterion = criterionimportance)
   lessimportantevar<-which(importancevar==min(importancevar,na.rm =T) )
   test<-vector()
+
+  # Determine if binary or multi-class
+  n_classes <- length(levels(tab[,1]))
+  lev <- levels(tab[,1])
+
   if(modeltype=="svm"){
     if(criterionmodel=="BER"){bermod<-BER(class = tab[,1],classpredict = model$fitted)}
     if(criterionmodel=="auc"){
-      if (fstype=='learn'){aucmod<-auc(roc(tab[,1], as.vector(model$decision.values),quiet=T))}
+      if (fstype=='learn'){
+        # Get scores for AUC calculation
+        if(n_classes == 2){
+          # Binary: use decision values
+          scores_mod <- as.vector(model$decision.values)
+        } else {
+          # Multi-class: use probabilities
+          scores_mod <- attr(predict(model, tab[,-1], probability=TRUE), "probabilities")
+          scores_mod <- scores_mod[, lev]  # Reorder to match levels
+        }
+        aucmod <- calculate_multiclass_auc(tab[,1], scores_mod)
+      }
       if (fstype=='val'){
         print("")
         #predict sur la validation
         #mais pour ca validation doit etre = a validationmodel, avec toute les transformation
-        }}
+      }
+    }
+
     for(i in 1:length(lessimportantevar)){
       tabdiff2<-tab[,-lessimportantevar[i]]
       tune_result_diff <- tune.svm(x=tabdiff2[,-1], y=tabdiff2[,1],
                                   gamma = 10^(-5:2), cost = 10^(-3:2),
-                                  cross=min(dim(tabdiff2)[1]-2,10))
+                                  cross=min(dim(tabdiff2)[1]-2,10),
+                                  probability = (criterionmodel=="auc" && n_classes > 2))
       resmodeldiff <- tune_result_diff$best.model
+
       if(criterionmodel=="accuracy"){test[i]<-resmodeldiff$tot.accuracy-model$tot.accuracy}
       if(criterionmodel=="BER"){
         #print(paste("Ber test :",BER(class = tabdiff2[,1],classpredict = resmodeldiff$fitted) ))
         test[i]<-bermod-BER(class = tabdiff2[,1],classpredict = resmodeldiff$fitted)}
       if(criterionmodel=="auc"){
-        test[i]<-auc(roc(tabdiff2[,1], as.vector(resmodeldiff$decision.values),quiet=T))-aucmod}
-    }}
+        # Get scores for AUC calculation
+        if(n_classes == 2){
+          # Binary: use decision values
+          scores_diff <- as.vector(resmodeldiff$decision.values)
+        } else {
+          # Multi-class: use probabilities
+          scores_diff <- attr(predict(resmodeldiff, tabdiff2[,-1], probability=TRUE), "probabilities")
+          scores_diff <- scores_diff[, lev]  # Reorder to match levels
+        }
+        test[i] <- calculate_multiclass_auc(tabdiff2[,1], scores_diff) - aucmod
+      }
+    }
+  }
+
   if(modeltype=="randomforest"){
     if(criterionmodel=="BER"){bermod<-BER(class = tab[,1],classpredict = model$predicted)}
-    if(criterionmodel=="auc"){aucmod<-auc(roc(tab[,1], as.vector(model$votes[,1]),quiet=T))}
+    if(criterionmodel=="auc"){
+      # Get scores for AUC calculation
+      if(n_classes == 2){
+        # Binary: use probability of first class
+        scores_mod <- as.vector(model$votes[,1])
+      } else {
+        # Multi-class: use full probability matrix
+        scores_mod <- model$votes
+      }
+      aucmod <- calculate_multiclass_auc(tab[,1], scores_mod)
+    }
+
     for(i in 1:length(lessimportantevar)){
       tabdiff2<-tab[,-lessimportantevar[i]]
       tabdiff2<-as.data.frame(tabdiff2[,c(colnames(tabdiff2)[1],sort(colnames(tabdiff2[,-1])))])
       tabdiff2<-as.data.frame(tabdiff2[sort(rownames(tabdiff2)),])
-      
+
       set.seed(20011203)
       resmodeldiff <-randomForest(tabdiff2[,-1],tabdiff2[,1],ntree=1000,importance=T,keep.forest=T,trace=T)
+
       if(criterionmodel=="accuracy"){test[i]<-mean(resmodeldiff$confusion[,3])-mean(model$confusion[,3])}
       if(criterionmodel=="BER"){
         test[i]<-bermod-BER(class = tabdiff2[,1],classpredict = resmodeldiff$predicted)}
       if(criterionmodel=="auc"){
-        test[i]<-auc(roc(tabdiff2[,1], as.vector(resmodeldiff$votes[,1]),quiet=T))-aucmod}
+        # Get scores for AUC calculation
+        if(n_classes == 2){
+          # Binary: use probability of first class
+          scores_diff <- as.vector(resmodeldiff$votes[,1])
+        } else {
+          # Multi-class: use full probability matrix
+          scores_diff <- resmodeldiff$votes
+        }
+        test[i] <- calculate_multiclass_auc(tabdiff2[,1], scores_diff) - aucmod
+      }
     }
   }
+
   #print(paste("test :",max(test)))
   if(max(test)>=0){num<-lessimportantevar[which(test==max(test))[1]]}
   else(num<-0)
@@ -3472,26 +3529,95 @@ importancemodelsvm<-function(model,modeltype,tabdiff,criterion){
   return(importancevar)
 }
 Fscore<-function(tab,class){
-  tabpos<-as.data.frame(tab[which(class==levels(class)[1]),])
-  npos<-nrow(tabpos)
-  tabneg<-as.data.frame(tab[which(class==levels(class)[2]),])
-  nneg<-nrow(tabneg)
-  fscore<-vector()
-  for(i in 1:ncol(tab)){
-    moypos<-mean(tabpos[,i])
-    moyneg<-mean(tabneg[,i])
-    moy<-mean(tab[,i])
-    numerateur<-(moypos-moy)^2+(moyneg-moy)^2
-    denominateur<-(sum((tabpos[,i]-moypos)^2)*(1/(npos-1)))+(sum((tabneg[,i]-moyneg)^2)*(1/(nneg-1)))
-    fscore[i]<-numerateur/denominateur
+  # Multi-class compatible F-score using ANOVA F-statistic
+  n_classes <- length(levels(class))
+
+  if(n_classes == 2){
+    # Binary classification - original implementation
+    tabpos<-as.data.frame(tab[which(class==levels(class)[1]),])
+    npos<-nrow(tabpos)
+    tabneg<-as.data.frame(tab[which(class==levels(class)[2]),])
+    nneg<-nrow(tabneg)
+    fscore<-vector()
+    for(i in 1:ncol(tab)){
+      moypos<-mean(tabpos[,i])
+      moyneg<-mean(tabneg[,i])
+      moy<-mean(tab[,i])
+      numerateur<-(moypos-moy)^2+(moyneg-moy)^2
+      denominateur<-(sum((tabpos[,i]-moypos)^2)*(1/(npos-1)))+(sum((tabneg[,i]-moyneg)^2)*(1/(nneg-1)))
+      fscore[i]<-numerateur/denominateur
+    }
+    return(c(NA,fscore))
+  } else {
+    # Multi-class: use ANOVA F-statistic
+    # F = (Between-group variability) / (Within-group variability)
+    fscore <- vector()
+    n_total <- nrow(tab)
+
+    for(i in 1:ncol(tab)){
+      # Overall mean
+      grand_mean <- mean(tab[,i], na.rm=TRUE)
+
+      # Between-group sum of squares (SSB)
+      ssb <- 0
+      for(k in 1:n_classes){
+        class_data <- tab[which(class == levels(class)[k]), i]
+        n_k <- length(class_data)
+        class_mean <- mean(class_data, na.rm=TRUE)
+        ssb <- ssb + n_k * (class_mean - grand_mean)^2
+      }
+
+      # Within-group sum of squares (SSW)
+      ssw <- 0
+      for(k in 1:n_classes){
+        class_data <- tab[which(class == levels(class)[k]), i]
+        class_mean <- mean(class_data, na.rm=TRUE)
+        ssw <- ssw + sum((class_data - class_mean)^2, na.rm=TRUE)
+      }
+
+      # Degrees of freedom
+      df_between <- n_classes - 1
+      df_within <- n_total - n_classes
+
+      # F-statistic
+      if(df_within > 0 && ssw > 0){
+        msb <- ssb / df_between  # Mean square between
+        msw <- ssw / df_within   # Mean square within
+        fscore[i] <- msb / msw
+      } else {
+        fscore[i] <- 0
+      }
+    }
+    return(c(NA, fscore))
   }
-  return(c(NA,fscore))
 }
 
 BER<-function(class,classpredict){
-  pos<-which(class==levels(class)[1])
-  neg<-which(class==levels(class)[2])
-  (1/2)*( sum(class[pos]!=classpredict[pos])/length(pos)+ sum(class[neg]!=classpredict[neg])/length(neg)  )
+  # Balanced Error Rate - works for binary and multi-class
+  # BER = average of per-class error rates
+  n_classes <- length(levels(class))
+
+  if(n_classes == 2){
+    # Binary classification - original implementation
+    pos<-which(class==levels(class)[1])
+    neg<-which(class==levels(class)[2])
+    return((1/2)*( sum(class[pos]!=classpredict[pos])/length(pos)+ sum(class[neg]!=classpredict[neg])/length(neg)))
+  } else {
+    # Multi-class: average error rate across all classes
+    error_rates <- numeric(n_classes)
+
+    for(k in 1:n_classes){
+      class_idx <- which(class == levels(class)[k])
+      if(length(class_idx) > 0){
+        error_rates[k] <- sum(class[class_idx] != classpredict[class_idx]) / length(class_idx)
+      } else {
+        error_rates[k] <- 0
+      }
+    }
+
+    # Return mean error rate across classes
+    return(mean(error_rates))
+  }
 }
 
 nll<-function(element){
