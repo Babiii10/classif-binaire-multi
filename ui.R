@@ -630,6 +630,7 @@ shinyUI(fluidPage(
                                                                                         )
                                                       ) # fin du grand conditionPanel
                                                       ),
+                                                     textOutput("class_summary"),
                                                      conditionalPanel(condition ="output.fileUploadedval & input.model!='nomodel'  ",
                                                                       checkboxInput("adjustval","Adjust model on validation data",F)
                                                      )
