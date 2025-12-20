@@ -221,12 +221,17 @@ shinyServer(function(input, output,session) {
 #                  specificity(MODEL()$DATAVALIDATIONMODEL$resvalidationmodel$classval,MODEL()$DATAVALIDATIONMODEL$resvalidationmodel$predictclassval)
 #       )
       table[20,1:5]<-c("main results",dim(MODEL()$DATALEARNINGMODEL$learningmodel)[2]-1,
-                  round(as.numeric(auc(roc(MODEL()$DATALEARNINGMODEL$reslearningmodel$classlearning,MODEL()$DATALEARNINGMODEL$reslearningmodel$scorelearning))),digits = 3),
+                  #round(as.numeric(auc(roc(MODEL()$DATALEARNINGMODEL$reslearningmodel$classlearning,MODEL()$DATALEARNINGMODEL$reslearningmodel$scorelearning))),digits = 3),
+                  round(calculate_multiclass_auc(MODEL()$DATALEARNINGMODEL$reslearningmodel$classlearning,
+                               MODEL()$DATALEARNINGMODEL$reslearningmodel$scorelearning), digits = 3),
                   sensibility(MODEL()$DATALEARNINGMODEL$reslearningmodel$predictclasslearning,MODEL()$DATALEARNINGMODEL$reslearningmodel$classlearning),
                   specificity(MODEL()$DATALEARNINGMODEL$reslearningmodel$predictclasslearning,MODEL()$DATALEARNINGMODEL$reslearningmodel$classlearning)
                   )
       if(input$adjustval){
-      table[20,6:8]<-c(round(as.numeric(auc(roc(MODEL()$DATAVALIDATIONMODEL$resvalidationmodel$classval,MODEL()$DATAVALIDATIONMODEL$resvalidationmodel$scoreval))),digits = 3),
+      table[20,6:8]<-c(
+                   #round(as.numeric(auc(roc(MODEL()$DATAVALIDATIONMODEL$resvalidationmodel$classval,MODEL()$DATAVALIDATIONMODEL$resvalidationmodel$scoreval))),digits = 3),
+                round(calculate_multiclass_auc(MODEL()$DATAVALIDATIONMODEL$resvalidationmodel$classval,
+                                               MODEL()$DATAVALIDATIONMODEL$resvalidationmodel$scoreval), digits)
                   sensibility(MODEL()$DATAVALIDATIONMODEL$resvalidationmodel$predictclassval,MODEL()$DATAVALIDATIONMODEL$resvalidationmodel$classval),
                   specificity(MODEL()$DATAVALIDATIONMODEL$resvalidationmodel$predictclassval,MODEL()$DATAVALIDATIONMODEL$resvalidationmodel$classval)
                   )
@@ -1073,10 +1078,70 @@ output$downloaddatalearning <- downloadHandler(
     downloaddataset(   MODEL()$DATALEARNINGMODEL$learningmodel, file) })
 
 
-output$plotmodeldecouvroc <- renderPlot({
-  datalearningmodel<<-MODEL()$DATALEARNINGMODEL
-  ROCcurve(validation = datalearningmodel$reslearningmodel$classlearning,decisionvalues =  datalearningmodel$reslearningmodel$scorelearning)
+# output$plotmodeldecouvroc <- renderPlot({
+#   datalearningmodel<<-MODEL()$DATALEARNINGMODEL
+#   ROCcurve(validation = datalearningmodel$reslearningmodel$classlearning,decisionvalues =  datalearningmodel$reslearningmodel$scorelearning)
+# })
+
+output$class_summary <- renderText({
+  if(!is.null(DATA()$LEARNING)){
+    n_classes <- length(levels(DATA()$LEARNING[,1]))
+    class_names <- paste(levels(DATA()$LEARNING[,1]), collapse=", ")
+    
+    if(n_classes == 2){
+      paste0("Binary classification (2 classes): ", class_names)
+    } else {
+      paste0("Multi-class classification (", n_classes, " classes): ", class_names)
+    }
+  }
 })
+
+# Pour multi-classe, afficher une courbe ROC par classe (One-vs-Rest)
+output$plotmodeldecouvroc <- renderPlot({
+  datalearningmodel <- MODEL()$DATALEARNINGMODEL
+  scorelearning <- datalearningmodel$reslearningmodel$scorelearning
+  classlearning <- datalearningmodel$reslearningmodel$classlearning
+  
+  if(is.matrix(scorelearning) && ncol(scorelearning) > 2){
+    # Multi-classe - plot multiple ROC curves
+    par(pty = "s")
+    plot(0, 0, type="n", xlim=c(0,1), ylim=c(0,1),
+         xlab="1 - Specificity", ylab="Sensitivity",
+         main="ROC Curves (One-vs-Rest)")
+    abline(a=0, b=1, col="gray", lty=2)
+    
+    colors <- rainbow(ncol(scorelearning))
+    class_names <- colnames(scorelearning)
+    
+    for(i in 1:ncol(scorelearning)){
+      binary_labels <- ifelse(classlearning == class_names[i], 1, 0)
+      roc_obj <- roc(binary_labels, scorelearning[,i])
+      lines(1-roc_obj$specificities, roc_obj$sensitivities, 
+            col=colors[i], lwd=2)
+    }
+    
+    legend("bottomright", legend=class_names, col=colors, lwd=2)
+    
+  } else {
+    # Classification binaire - comportement actuel
+    roc_obj <- roc(classlearning, as.vector(scorelearning))
+    plot(roc_obj, print.auc=TRUE, print.thres=TRUE)
+  }
+})
+
+# Ajouter dans server.R
+output$confusion_matrix_detailed <- renderTable({
+  if(input$model != "nomodel"){
+    datalearningmodel <- MODEL()$DATALEARNINGMODEL
+    conf_mat <- table(Predicted = datalearningmodel$reslearningmodel$predictclasslearning,
+                      Actual = datalearningmodel$reslearningmodel$classlearning)
+    
+    # Ajouter les totaux
+    conf_mat_with_totals <- addmargins(conf_mat)
+    return(conf_mat_with_totals)
+  }
+})
+
 output$youndendecouv<-renderTable({
   datalearningmodel<<-MODEL()$DATALEARNINGMODEL
   resyounden<-younden(datalearningmodel$reslearningmodel$classlearning, datalearningmodel$reslearningmodel$scorelearning)
