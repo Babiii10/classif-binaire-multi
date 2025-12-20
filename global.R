@@ -1307,6 +1307,12 @@ varselClust <- function(toto, n_clusters = 100, n_bootstrap = 500, alpha_enet = 
 clustEnetSelection <- function(toto, n_clusters = 100, n_bootstrap = 500,
                                alpha_enet = 0.5, min_selection_freq = 0.5,
                                preprocess = TRUE, min_patients = 20){
+  # Verify binary classification only
+  lev <- levels(toto[,1])
+  if(length(lev) > 2){
+    stop("clustEnet selection is currently only supported for binary classification. Please use lasso, elasticnet, or ridge for multi-class.")
+  }
+
   # Run varselClust
   clust_result <- varselClust(toto,
                               n_clusters = n_clusters,
@@ -3071,8 +3077,8 @@ modelfunction <- function(learningmodel,
       #levels(predictclassval)<-paste("test",levels(predictclassval),sep="")
       levels(predictclassval)<-paste("test",lev,sep="")
       resvalidationmodel<-data.frame(classval,scoreval,predictclassval)
-      colnames(resvalidationmodel) <-c("classval","scoreval","predictclassval") 
-      auc<-auc(roc(as.vector(classval), as.vector(scoreval),quiet=T))
+      colnames(resvalidationmodel) <-c("classval","scoreval","predictclassval")
+      auc<-calculate_multiclass_auc(classval, scoreval)
       datavalidationmodel<-list("validationdiff"=validationdiff,"validationmodel"=validationmodel,"resvalidationmodel"=resvalidationmodel,"auc"=auc)
       
     }
@@ -3338,6 +3344,12 @@ palet<-function(predtype,multiple=FALSE){
 
 
 selectedfeature<-function(model,modeltype,tab,validation,criterionimportance,criterionmodel,fstype="learn"){
+  # Verify binary classification only
+  if(length(levels(tab[,1])) > 2){
+    warning("Feature selection via selectedfeature() is only supported for binary classification. Skipping feature selection.")
+    return(list("dataset"=tab,"model"=model))
+  }
+
   rmvar<-testmodel(model=model,modeltype = modeltype,tab=tab,validation=validation,
                    criterionimportance = criterionimportance,criterionmodel = criterionmodel,fstype=fstype)
   i=0
@@ -3791,14 +3803,14 @@ testparametersfunction<-function(learning,validation,tabparameters){
       #thresholdused (NEW: index 7)
       results[i,7]<-round(parameters$thresholdmodel, digits = 4)
       #auclearning
-      results[i,4]<-round(as.numeric(auc(roc(resmodel$datalearningmodel$reslearningmodel$classlearning,resmodel$datalearningmodel$reslearningmodel$scorelearning,quiet=T))),digits = 3)
+      results[i,4]<-round(calculate_multiclass_auc(resmodel$datalearningmodel$reslearningmodel$classlearning,resmodel$datalearningmodel$reslearningmodel$scorelearning),digits = 3)
       #sensibilitylearning
       results[i,5]<-sensibility(resmodel$datalearningmodel$reslearningmodel$predictclasslearning,resmodel$datalearningmodel$reslearningmodel$classlearning)
       #specificitylearning
       results[i,6]<-specificity(resmodel$datalearningmodel$reslearningmodel$predictclasslearning,resmodel$datalearningmodel$reslearningmodel$classlearning)
       if(!is.null(validation)){
       #aucvalidation
-      results[i,1]<-round(as.numeric(auc(roc(resmodel$datavalidationmodel$resvalidationmodel$classval,resmodel$datavalidationmodel$resvalidationmodel$scoreval,quiet=T))),digits = 3)
+      results[i,1]<-round(calculate_multiclass_auc(resmodel$datavalidationmodel$resvalidationmodel$classval,resmodel$datavalidationmodel$resvalidationmodel$scoreval),digits = 3)
       #sensibilityvalidation
       results[i,2]<-sensibility(resmodel$datavalidationmodel$resvalidationmodel$predictclassval,resmodel$datavalidationmodel$resvalidationmodel$classval)
       #specificityvalidation
