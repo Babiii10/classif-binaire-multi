@@ -717,7 +717,8 @@ shinyUI(fluidPage(
                                                                         column(4,
                                                                                plotOutput("plotmodeldecouvbp")%>% withSpinner(color="#0dc5c1",type = 1),
                                                                                p(downloadButton("downloadplotmodeldecouvbp","Download plot"),
-                                                                                 downloadButton('downloaddatamodeldecouvbp', 'Download raw data'),align="center")
+                                                                                 downloadButton('downloaddatamodeldecouvbp', 'Download raw data'),align="center"),
+                                                                               tableOutput("confusion_matrix_detailed")
                                                                         ),
                                                                         column(2,
                                                                                conditionalPanel(condition="input.plotscoremodel=='points'",checkboxInput("shownames1","show indivuals names",value=FALSE)),
