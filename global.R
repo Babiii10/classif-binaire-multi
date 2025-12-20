@@ -3488,13 +3488,65 @@ nll<-function(element){
 }
 
 sensibility<-function(predict,class){
-data<-table(predict,class)
-sensi<-round(data[1,1]/(data[1,1]+data[2,1]),digits = 3)
-return(sensi)
+  data<-table(predict,class)
+  n_classes <- nrow(data)
+  
+  if(n_classes == 2){
+    # Classification binaire
+    sensi<-round(data[1,1]/(data[1,1]+data[2,1]),digits = 3)
+    return(sensi)
+  } else {
+    # Multi-classe : calculer la sensibilité par classe (recall)
+    sensitivity_per_class <- diag(data) / rowSums(data)
+    # Retourner la moyenne macro
+    return(round(mean(sensitivity_per_class, na.rm=TRUE), digits = 3))
+  }
 }
+
 specificity<-function(predict,class){
-  data<-table(predict,class )
-  round(data[2,2]/(data[1,2]+data[2,2]),digit=3)
+  data<-table(predict,class)
+  n_classes <- nrow(data)
+  
+  if(n_classes == 2){
+    # Classification binaire
+    return(round(data[2,2]/(data[1,2]+data[2,2]), digit=3))
+  } else {
+    # Multi-classe : calculer la spécificité par classe
+    # Spécificité = TN / (TN + FP)
+    total <- sum(data)
+    spec_per_class <- numeric(n_classes)
+    for(i in 1:n_classes){
+      TN <- total - sum(data[i,]) - sum(data[,i]) + data[i,i]
+      FP <- sum(data[i,]) - data[i,i]
+      spec_per_class[i] <- TN / (TN + FP)
+    }
+    return(round(mean(spec_per_class, na.rm=TRUE), digit=3))
+  }
+}
+
+# Ajouter dans global.R
+calculate_multiclass_auc <- function(true_labels, predicted_scores){
+  n_classes <- ncol(predicted_scores)
+  
+  if(is.null(n_classes) || n_classes == 1){
+    # Binaire - utiliser pROC normalement
+    return(as.numeric(auc(roc(true_labels, as.vector(predicted_scores)))))
+  } else {
+    # Multi-classe - One-vs-Rest (OvR) AUC
+    library(pROC)
+    auc_per_class <- numeric(n_classes)
+    class_names <- colnames(predicted_scores)
+    
+    for(i in 1:n_classes){
+      # Créer une variable binaire pour cette classe
+      binary_labels <- ifelse(true_labels == class_names[i], 1, 0)
+      # Calculer AUC pour cette classe
+      auc_per_class[i] <- as.numeric(auc(roc(binary_labels, predicted_scores[,i])))
+    }
+    
+    # Retourner l'AUC macro (moyenne des AUC par classe)
+    return(mean(auc_per_class, na.rm=TRUE))
+  }
 }
 
 # cette fonction construit un tableau de parametres a tester a partir d'une liste de parametres
@@ -4222,3 +4274,4 @@ positive<-function(x){
 #'   ))
 #'   
 #' }
+
