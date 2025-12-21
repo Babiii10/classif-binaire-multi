@@ -3254,32 +3254,130 @@ ROCcurve<-function(validation,decisionvalues,maintitle="Roc curve",graph=T,ggplo
 scoremodelplot<-function(class,score,names,threshold,type,graph,printnames){
   class<-factor(class,levels =rev(levels(class)))
 
+  # Detect if binary or multi-class based on score structure
+  is_multiclass <- is.matrix(score) && ncol(score) > 1
+
   if(type=="boxplot"){
     boxplotggplot(class =class,score =score,names=names,threshold=threshold,
-                  graph = graph)
+                  graph = graph, is_multiclass = is_multiclass)
   }
   else if(type=="points"){
-    plot_pred_type_distribution(class = class, score = score,names=names,threshold=threshold,graph=graph,printnames=printnames  )
-  } 
+    if(is_multiclass){
+      # For multi-class, show a different visualization
+      # (threshold-based classification doesn't make sense for multi-class)
+      plot_multiclass_scores(class = class, score = score, names=names, graph=graph, printnames=printnames)
+    } else {
+      # Binary: use original function
+      plot_pred_type_distribution(class = class, score = score,names=names,threshold=threshold,graph=graph,printnames=printnames)
+    }
+  }
 }
 
-boxplotggplot<-function(class,score,names,threshold,maintitle="Score representation ",graph=T){
-  data<-data.frame("names"=names,"class"= class,"score"=as.vector(score))
-  if(!graph){return(data)}
-  p<-ggplot(data, aes(x=class, y=score)) +
-    scale_fill_manual( values = c("#00BFC4","#F8766D") ) +
-    geom_boxplot(aes(fill=class)) +
-    geom_hline(yintercept = threshold, color='red', alpha=0.6) +
-    ggtitle(maintitle) + 
-    theme(plot.title=element_text( size=15), 
-          axis.text.x = element_text(size = 12 ,  face = 'bold' ) ,
-          axis.text.y =  element_text(size = 12 , face =  'bold'),
-          axis.title.x = element_text(size = 15 , face = 'bold'), 
-          axis.title.y =  element_text(size = 15 , face = 'bold'),
-          legend.text = element_text( size = 12 , face = 'bold'),
-          legend.title = element_text(size = 14 , face =  'bold'))
-  
-  p
+boxplotggplot<-function(class,score,names,threshold,maintitle="Score representation ",graph=T, is_multiclass=FALSE){
+  if(!is_multiclass){
+    # Binary classification - original implementation
+    data<-data.frame("names"=names,"class"= class,"score"=as.vector(score))
+    if(!graph){return(data)}
+    p<-ggplot(data, aes(x=class, y=score)) +
+      scale_fill_manual( values = c("#00BFC4","#F8766D") ) +
+      geom_boxplot(aes(fill=class)) +
+      geom_hline(yintercept = threshold, color='red', alpha=0.6) +
+      ggtitle(maintitle) +
+      theme(plot.title=element_text( size=15),
+            axis.text.x = element_text(size = 12 ,  face = 'bold' ) ,
+            axis.text.y =  element_text(size = 12 , face =  'bold'),
+            axis.title.x = element_text(size = 15 , face = 'bold'),
+            axis.title.y =  element_text(size = 15 , face = 'bold'),
+            legend.text = element_text( size = 12 , face = 'bold'),
+            legend.title = element_text(size = 14 , face =  'bold'))
+    return(p)
+  } else {
+    # Multi-class: show boxplots of predicted probabilities
+    # Convert score matrix to long format
+    n_classes <- ncol(score)
+    class_names <- colnames(score)
+
+    # Create long-format data
+    data_long <- data.frame()
+    for(i in 1:n_classes){
+      df_class <- data.frame(
+        names = names,
+        true_class = class,
+        predicted_class = class_names[i],
+        probability = score[, i]
+      )
+      data_long <- rbind(data_long, df_class)
+    }
+
+    if(!graph){return(data_long)}
+
+    # Generate colors dynamically
+    n_colors <- length(unique(class))
+    colors <- rainbow(n_colors)
+
+    p <- ggplot(data_long, aes(x=predicted_class, y=probability, fill=true_class)) +
+      geom_boxplot() +
+      ggtitle(paste(maintitle, "(Multi-class probabilities)")) +
+      xlab("Predicted Class") +
+      ylab("Probability") +
+      theme(plot.title=element_text( size=15),
+            axis.text.x = element_text(size = 12 ,  face = 'bold' ) ,
+            axis.text.y =  element_text(size = 12 , face =  'bold'),
+            axis.title.x = element_text(size = 15 , face = 'bold'),
+            axis.title.y =  element_text(size = 15 , face = 'bold'),
+            legend.text = element_text( size = 12 , face = 'bold'),
+            legend.title = element_text(size = 14 , face =  'bold'))
+    return(p)
+  }
+}
+
+plot_multiclass_scores <- function(class, score, names, maintitle="Multi-class Score Representation", printnames=F, graph=T){
+  # For multi-class: show predicted probabilities for each sample
+  # score is a matrix (n_samples x n_classes)
+  n_samples <- nrow(score)
+  n_classes <- ncol(score)
+  class_names <- colnames(score)
+
+  # Get predicted class (argmax)
+  predicted_class <- class_names[apply(score, 1, which.max)]
+
+  # Create data frame for plotting
+  df <- data.frame(
+    names = names,
+    true_class = class,
+    predicted_class = factor(predicted_class, levels = class_names)
+  )
+
+  # Add max probability
+  df$max_prob <- apply(score, 1, max)
+
+  # Determine if prediction is correct
+  df$correct <- (df$true_class == df$predicted_class)
+
+  if(!graph){return(df)}
+
+  # Create plot
+  set.seed(20011203)
+  p <- ggplot(df, aes(x=true_class, y=max_prob, color=correct)) +
+    geom_jitter(width=0.2, alpha=0.7, size=2) +
+    scale_color_manual(values = c("TRUE" = "#00BA38", "FALSE" = "#F8766D"),
+                       labels = c("TRUE" = "Correct", "FALSE" = "Incorrect")) +
+    ggtitle(maintitle) +
+    xlab("True Class") +
+    ylab("Maximum Predicted Probability") +
+    theme(plot.title=element_text(size=15),
+          axis.text.x = element_text(size = 12, face = 'bold'),
+          axis.text.y = element_text(size = 12, face = 'bold'),
+          axis.title.x = element_text(size = 15, face = 'bold'),
+          axis.title.y = element_text(size = 15, face = 'bold'),
+          legend.text = element_text(size = 12, face = 'bold'),
+          legend.title = element_text(size = 14, face = 'bold'))
+
+  if(printnames){
+    p <- p + geom_text(aes(label=names), hjust=-0.1, vjust=0, size=3)
+  }
+
+  return(p)
 }
 
 plot_pred_type_distribution <- function(class,score,names, threshold,maintitle="Score representation",printnames=F,graph=T) {
@@ -3513,13 +3611,14 @@ importancemodelsvm<-function(model,modeltype,tabdiff,criterion){
       
     }
     if(modeltype=="randomforest"){
-      
+
       tabdiff<-as.data.frame(tabdiff[,c(colnames(tabdiff)[1],sort(colnames(tabdiff[,-1])))])
       tabdiff<-as.data.frame(tabdiff2[sort(rownames(tabdiff)),])
-      
+
       set.seed(20011203)
       model <- randomForest(tabdiff[,-1],tabdiff[,1],ntree=1000,importance=T,keep.forest=T)
-      importancevar<-model$importance[,4]
+      # Use MeanDecreaseGini (last column) which works for both binary and multi-class
+      importancevar<-model$importance[, ncol(model$importance)]
       importancevar<-c(NA,importancevar)
     }
   }
