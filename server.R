@@ -173,13 +173,20 @@ shinyServer(function(input, output,session) {
     table[2,1:9]<-c("import parameters",learningfile$type,input$dec,input$sep,input$NAstring,
                          input$sheetn,input$skipn,input$zeroegalNA,input$transpose)
 
-    table[3,]<-c("#","name learning file", "number of rows", "number of columns", paste("number of ",levels(DATA()$LEARNING[,1])[1]),
-             paste("number of ",levels(DATA()$LEARNING[,1])[2]),"name validation file", "number of rows", "number of columns", paste("number of ",levels(DATA()$VALIDATION[,1])[1]),
-             paste("number of ",levels(DATA()$VALIDATION[,1])[2]))
-    table[4,]<-c("main results",learningfile$name,dim(DATA()$LEARNING)[1],dim(DATA()$LEARNING)[2],nll(sum(DATA()$LEARNING[,1]==levels(DATA()$LEARNING[,1])[1])),
-                 nll(sum(DATA()$LEARNING[,1]==levels(DATA()$LEARNING[,1])[2])),nll(input$validationfile$name),nll(dim(DATA()$VALIDATION)[1]),
-                 nll(dim(DATA()$VALIDATION)[2]),nll(sum(DATA()$VALIDATION[,1]==levels(DATA()$VALIDATION[,1])[1])),
-                 nll(sum(DATA()$VALIDATION[,1]==levels(DATA()$VALIDATION[,1])[2])))
+    # Dynamic class counts for multi-class support
+    learning_levels <- levels(DATA()$LEARNING[,1])
+    learning_class_counts <- sapply(learning_levels, function(lv) nll(sum(DATA()$LEARNING[,1]==lv)))
+    learning_class_summary <- paste(paste(learning_levels, ":", learning_class_counts, sep=""), collapse=", ")
+
+    validation_levels <- levels(DATA()$VALIDATION[,1])
+    validation_class_counts <- sapply(validation_levels, function(lv) nll(sum(DATA()$VALIDATION[,1]==lv)))
+    validation_class_summary <- paste(paste(validation_levels, ":", validation_class_counts, sep=""), collapse=", ")
+
+    table[3,]<-c("#","name learning file", "number of rows", "number of columns", "class distribution",
+             "","name validation file", "number of rows", "number of columns", "class distribution", "")
+    table[4,]<-c("main results",learningfile$name,dim(DATA()$LEARNING)[1],dim(DATA()$LEARNING)[2],
+                 learning_class_summary,"",nll(input$validationfile$name),nll(dim(DATA()$VALIDATION)[1]),
+                 nll(dim(DATA()$VALIDATION)[2]),validation_class_summary,"")
     table[5,1:8]<-c("#","percentage of values minimum","method of selection","select features structured","search structur in",
                      "threshold p-value of proportion test", "maximum % values of the min group","minimum % values of the max group")
     table[6,1:8]<-c("select parameters",selectdataparameters[[1]],selectdataparameters[[2]],selectdataparameters[[3]],
@@ -329,8 +336,8 @@ SELECTDATA<-reactive({
            need(input$thresholdNAstructure>0,input$thresholdNAstructure<1,"threshold of the pvalue has to be between 0 and 1"))
   learning<<-DATA()$LEARNING
   validate(need(input$confirmdatabutton!=0,"Importation of datas has to be confirmed"))
-  
-  validate(need(length(levels(learning[,1]))==2,"number of groups is not equal to 2"))
+
+  validate(need(length(levels(learning[,1]))>=2,"number of groups must be at least 2"))
   resselectdata<<-selectdatafunction(learning = learning,selectdataparameters = selectdataparameters)
   list(LEARNINGSELECT=resselectdata$learningselect,STRUCTUREDFEATURES=resselectdata$structuredfeatures,DATASTRUCTUREDFEATURES=resselectdata$datastructuredfeatures,selectdataparameters)
 })
@@ -564,10 +571,22 @@ output$downloaddatastatistics<- downloadHandler(
   }
 )
 output$positif<-renderText({
-  res<-levels(DATA()$LEARNING[,1])[1]
+  # For binary: return first class; for multi-class: return all classes
+  lev <- levels(DATA()$LEARNING[,1])
+  if(length(lev) == 2){
+    return(lev[1])
+  } else {
+    return(paste("Classes:", paste(lev, collapse=", ")))
+  }
 })
 output$negatif<-renderText({
-  res<-levels(DATA()$LEARNING[,1])[2]
+  # For binary: return second class; for multi-class: return empty string
+  lev <- levels(DATA()$LEARNING[,1])
+  if(length(lev) == 2){
+    return(lev[2])
+  } else {
+    return("")
+  }
 })
 output$volcanoplot <- renderPlot({
   datatest<<-TEST()$DATATEST
