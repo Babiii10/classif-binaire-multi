@@ -2,11 +2,17 @@ options(xtable.include.colnames=T)
 options(xtable.include.rownames=T)
 #Packages
 #rm(list=ls())
-usePackage <- function(p) 
+usePackage <- function(p)
 {
   if (!is.element(p, installed.packages()[,1]))
     install.packages(p, dep = TRUE)
   require(p, character.only = TRUE)
+}
+
+# Install digest for caching if not available
+if (!require("digest", quietly = TRUE)) {
+  install.packages("digest")
+  library(digest)
 }
 usePackage("zoo")
 usePackage("missMDA")#imputepca
@@ -40,6 +46,23 @@ usePackage("xgboost")#for xgboost gradient boosting
 usePackage("lightgbm")#for lightgbm gradient boosting
 usePackage("class")#for k-nearest neighbors
 
+##########################
+# Load Additional Modules
+##########################
+
+# Load configuration system
+source("config.R", local = TRUE)
+
+# Load caching system
+source("cache.R", local = TRUE)
+
+# Load ensemble methods
+source("ensemble.R", local = TRUE)
+
+# Load parallel computing system
+source("parallel.R", local = TRUE)
+
+message("All modules loaded successfully")
 
 ##########################
 # Multi-class Classification Helper Functions
@@ -1165,13 +1188,22 @@ preprocess_peptides <- function(peptide_data, min_patients = 20) {
 # Variable selection using clustering and elastic net with bootstrap
 varselClust <- function(toto, n_clusters = 100, n_bootstrap = 500, alpha_enet = 0.5,
                         min_selection_freq = 0.5, preprocess = TRUE, min_patients = 20){
-  
+
   withProgress(message = 'Sélection de variables en cours...', value = 0, {
-    
+
     # Extract group and data
     lev <- levels(toto[,1])
-    group <- ifelse(toto[,1] == lev[1], 1, 0)
-    y <- group
+    n_classes <- length(lev)
+
+    # For binary: encode as 0/1; for multi-class: keep factor or numeric encoding
+    if(n_classes == 2){
+      group <- ifelse(toto[,1] == lev[1], 1, 0)
+      y <- group
+    } else {
+      # Multi-class: encode as 0, 1, 2, ... (n_classes-1)
+      y <- as.numeric(toto[,1]) - 1
+    }
+
     data <- as.matrix(toto[,-1])
     
     # Optional preprocessing
@@ -1205,19 +1237,31 @@ varselClust <- function(toto, n_clusters = 100, n_bootstrap = 500, alpha_enet = 
     k <- min(n_clusters, ncol(data))
     clusters <- cutree(hc, k = k)
     
-    # Step 2: Select one variable per cluster using Wilcoxon test
+    # Step 2: Select one variable per cluster using statistical test
+    # Binary: Wilcoxon test; Multi-class: Kruskal-Wallis test
     incProgress(0.05, detail = "Sélection par cluster...")
-    cat(sprintf("Step 2: Selecting one variable per cluster (Wilcoxon test)...\n"))
+    if(n_classes == 2){
+      cat(sprintf("Step 2: Selecting one variable per cluster (Wilcoxon test)...\n"))
+    } else {
+      cat(sprintf("Step 2: Selecting one variable per cluster (Kruskal-Wallis test)...\n"))
+    }
+
     selected_peptides <- c()
-    
+
     for (i in 1:k){
       cluster_peptides <- names(clusters[clusters == i])
-      
+
       if (length(cluster_peptides) > 1){
         p_values <- c()
         for (peptide in cluster_peptides){
           test_result <- tryCatch({
-            wilcox.test(data[, peptide] ~ y, exact = FALSE)
+            if(n_classes == 2){
+              # Binary: Wilcoxon test
+              wilcox.test(data[, peptide] ~ y, exact = FALSE)
+            } else {
+              # Multi-class: Kruskal-Wallis test
+              kruskal.test(data[, peptide] ~ toto[,1])
+            }
           }, error = function(e){
             list(p.value = 1)
           })
@@ -1239,32 +1283,54 @@ varselClust <- function(toto, n_clusters = 100, n_bootstrap = 500, alpha_enet = 
     cat(sprintf("Step 3: Bootstrap + Elastic Net selection (%d iterations)...\n", n_bootstrap))
     set.seed(123)
     selected_peptides_list <- list()
-    
+
+    # Determine family for glmnet
+    if(n_classes == 2){
+      glmnet_family <- "binomial"
+    } else {
+      glmnet_family <- "multinomial"
+    }
+
     progress_step <- 0.7 / n_bootstrap  # 70% du total pour le bootstrap
-    
+
     for (b in 1:n_bootstrap) {
       if(b %% 50 == 0) {
-        incProgress(progress_step * 50, 
+        incProgress(progress_step * 50,
                     detail = sprintf("Bootstrap: %d/%d (%.1f%%)", b, n_bootstrap, (b/n_bootstrap)*100))
         cat(sprintf("  Bootstrap iteration: %d/%d\n", b, n_bootstrap))
       }
-      
+
       bootstrap_indices <- sample(1:nrow(data_clust), replace = TRUE)
       X_bootstrap <- data_clust[bootstrap_indices, , drop=FALSE]
       y_bootstrap <- y[bootstrap_indices]
-      
+
       lasso_model <- tryCatch({
         cv.glmnet(as.matrix(X_bootstrap),
                   y_bootstrap,
-                  family = "binomial",
-                  alpha = alpha_enet)
+                  family = glmnet_family,
+                  alpha = alpha_enet,
+                  type.multinomial = if(n_classes > 2) "grouped" else NULL)
       }, error = function(e){
         NULL
       })
-      
+
       if(!is.null(lasso_model)){
         coef_lasso <- coef(lasso_model, s = "lambda.min")
-        selected_peptides_iter <- rownames(coef_lasso)[which(coef_lasso != 0)][-1]
+
+        if(n_classes == 2){
+          # Binary: coef is a sparse matrix
+          selected_peptides_iter <- rownames(coef_lasso)[which(coef_lasso != 0)][-1]
+        } else {
+          # Multi-class: coef is a list of sparse matrices (one per class)
+          # Aggregate coefficients across all classes
+          selected_peptides_iter <- c()
+          for(class_idx in 1:n_classes){
+            coef_class <- coef_lasso[[class_idx]]
+            selected_vars_class <- rownames(coef_class)[which(coef_class != 0)][-1]  # Remove intercept
+            selected_peptides_iter <- union(selected_peptides_iter, selected_vars_class)
+          }
+        }
+
         selected_peptides_list[[b]] <- selected_peptides_iter
       }
     }
@@ -1307,13 +1373,15 @@ varselClust <- function(toto, n_clusters = 100, n_bootstrap = 500, alpha_enet = 
 clustEnetSelection <- function(toto, n_clusters = 100, n_bootstrap = 500,
                                alpha_enet = 0.5, min_selection_freq = 0.5,
                                preprocess = TRUE, min_patients = 20){
-  # Verify binary classification only
+  # Support both binary and multi-class classification
   lev <- levels(toto[,1])
-  if(length(lev) > 2){
-    stop("clustEnet selection is currently only supported for binary classification. Please use lasso, elasticnet, or ridge for multi-class.")
+  n_classes <- length(lev)
+
+  if(n_classes < 2){
+    stop("Need at least 2 classes for classification")
   }
 
-  # Run varselClust
+  # Run varselClust (now supports multi-class)
   clust_result <- varselClust(toto,
                               n_clusters = n_clusters,
                               n_bootstrap = n_bootstrap,
@@ -1337,38 +1405,70 @@ clustEnetSelection <- function(toto, n_clusters = 100, n_bootstrap = 500,
   
   # Calculate statistics for selected variables (similar to multivariateselection)
   lev <- levels(toto[,1])
-  group <- ifelse(toto[,1] == lev[1], 1, 0)
   x <- as.matrix(toto[,-1])
-  
+
   # Get selection frequencies for selected variables
   freq_df <- clust_result$selection_frequencies
   freq_values <- freq_df$SelectionFrequency[match(selected_vars, freq_df$Variable)]
-  
-  # AUC for each selected variable
-  auc_values <- sapply(selected_vars, function(var){
-    auc(roc(group, x[, var], quiet=TRUE))
-  })
-  
-  # Mean values by group
-  mlev1 <- colMeans(x[which(group==0), selected_vars, drop=FALSE], na.rm=TRUE)
-  mlev2 <- colMeans(x[which(group==1), selected_vars, drop=FALSE], na.rm=TRUE)
-  
-  # Fold change
-  FC1o2 <- mlev1 / (mlev2 + 0.0001)
-  logFC1o2 <- log2(abs(FC1o2))
-  
-  # Create results dataframe
-  results <- data.frame(
-    name = selected_vars,
-    SelectionFrequency = freq_values,
-    AUC = auc_values,
-    FoldChange = FC1o2,
-    logFoldChange = logFC1o2,
-    mean_group1 = mlev1,
-    mean_group2 = mlev2,
-    stringsAsFactors = FALSE
-  )
-  
+
+  if(n_classes == 2){
+    # BINARY CLASSIFICATION
+    group <- ifelse(toto[,1] == lev[1], 1, 0)
+
+    # AUC for each selected variable
+    auc_values <- sapply(selected_vars, function(var){
+      auc(roc(group, x[, var], quiet=TRUE))
+    })
+
+    # Mean values by group
+    mlev1 <- colMeans(x[which(group==0), selected_vars, drop=FALSE], na.rm=TRUE)
+    mlev2 <- colMeans(x[which(group==1), selected_vars, drop=FALSE], na.rm=TRUE)
+
+    # Fold change
+    FC1o2 <- mlev1 / (mlev2 + 0.0001)
+    logFC1o2 <- log2(abs(FC1o2))
+
+    # Create results dataframe
+    results <- data.frame(
+      name = selected_vars,
+      SelectionFrequency = freq_values,
+      AUC = auc_values,
+      FoldChange = FC1o2,
+      logFoldChange = logFC1o2,
+      mean_group1 = mlev1,
+      mean_group2 = mlev2,
+      stringsAsFactors = FALSE
+    )
+
+  } else {
+    # MULTI-CLASS CLASSIFICATION
+    # Multi-class AUC for each selected variable
+    auc_values <- sapply(selected_vars, function(var){
+      tryCatch({
+        roc_obj <- multiclass.roc(toto[,1], x[, var], quiet=TRUE)
+        as.numeric(auc(roc_obj))
+      }, error = function(e) return(0.5))
+    })
+
+    # Mean values by group for each class
+    means_matrix <- matrix(nrow=length(selected_vars), ncol=n_classes)
+    for(j in 1:n_classes){
+      means_matrix[, j] <- colMeans(x[which(toto[,1] == lev[j]), selected_vars, drop=FALSE], na.rm=TRUE)
+    }
+    colnames(means_matrix) <- paste("mean", lev, sep="_")
+
+    # Create results dataframe
+    results <- data.frame(
+      name = selected_vars,
+      SelectionFrequency = freq_values,
+      AUC_multiclass = auc_values,
+      stringsAsFactors = FALSE
+    )
+
+    # Add means for each class
+    results <- cbind(results, means_matrix)
+  }
+
   # Sort by selection frequency
   results <- results[order(results$SelectionFrequency, decreasing=TRUE), ]
   
