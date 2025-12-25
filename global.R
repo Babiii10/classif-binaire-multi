@@ -9,9 +9,11 @@ usePackage <- function(p)
   require(p, character.only = TRUE)
 }
 
-# Install digest for caching if not available
-if (!require("digest", quietly = TRUE)) {
-  install.packages("digest")
+# Install digest for caching if not available (optional)
+if (!requireNamespace("digest", quietly = TRUE)) {
+  message("Package 'digest' not found - caching features will be limited")
+  message("Install with: install.packages('digest')")
+} else {
   library(digest)
 }
 usePackage("zoo")
@@ -51,18 +53,55 @@ usePackage("class")#for k-nearest neighbors
 ##########################
 
 # Load configuration system
-source("config.R", local = TRUE)
+tryCatch({
+  source("config.R", local = TRUE)
+  message("✓ Configuration system loaded")
+}, error = function(e) {
+  warning(paste("Could not load config.R:", e$message))
+  # Define minimal fallback configuration
+  DEFAULT_PARAMS <<- list()
+  PERFORMANCE <<- list(enable_parallel = FALSE, enable_cache = FALSE)
+  ENSEMBLE <<- list(enable_ensembling = FALSE)
+  UI_CONFIG <<- list(enable_tooltips = FALSE)
+})
 
 # Load caching system
-source("cache.R", local = TRUE)
+tryCatch({
+  source("cache.R", local = TRUE)
+  message("✓ Caching system loaded")
+}, error = function(e) {
+  warning(paste("Could not load cache.R:", e$message))
+  # Define fallback cache functions
+  cached_select_data <<- function(...) selectdata(...)
+  cached_transform_data <<- function(...) transformdata(...)
+  cached_statistical_test <<- function(...) NULL
+})
 
 # Load ensemble methods
-source("ensemble.R", local = TRUE)
+tryCatch({
+  source("ensemble.R", local = TRUE)
+  message("✓ Ensemble methods loaded")
+}, error = function(e) {
+  warning(paste("Could not load ensemble.R:", e$message))
+})
 
 # Load parallel computing system
-source("parallel.R", local = TRUE)
+tryCatch({
+  source("parallel.R", local = TRUE)
+  message("✓ Parallel computing loaded")
+}, error = function(e) {
+  warning(paste("Could not load parallel.R:", e$message))
+})
 
-message("All modules loaded successfully")
+# Load tooltips system
+tryCatch({
+  source("tooltips.R", local = TRUE)
+  message("✓ Tooltips system loaded")
+}, error = function(e) {
+  warning(paste("Could not load tooltips.R:", e$message))
+})
+
+message("===== Module loading complete =====")
 
 ##########################
 # Multi-class Classification Helper Functions

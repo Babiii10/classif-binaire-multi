@@ -19,7 +19,14 @@ generate_cache_key <- function(...) {
   params <- list(...)
   # Convert to string and hash
   key_string <- paste(capture.output(str(params)), collapse = "")
-  key <- digest::digest(key_string, algo = "md5")
+
+  # Use digest if available, otherwise use simple hash
+  if (requireNamespace("digest", quietly = TRUE)) {
+    key <- digest::digest(key_string, algo = "md5")
+  } else {
+    # Fallback: simple hash based on string
+    key <- as.character(abs(sum(utf8ToInt(key_string)) %% 999999999))
+  }
   return(key)
 }
 
