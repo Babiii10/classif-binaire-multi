@@ -238,7 +238,7 @@ shinyServer(function(input, output,session) {
       table[20,6:8]<-c(
                    #round(as.numeric(auc(roc(MODEL()$DATAVALIDATIONMODEL$resvalidationmodel$classval,MODEL()$DATAVALIDATIONMODEL$resvalidationmodel$scoreval))),digits = 3),
                 round(calculate_multiclass_auc(MODEL()$DATAVALIDATIONMODEL$resvalidationmodel$classval,
-                                               MODEL()$DATAVALIDATIONMODEL$resvalidationmodel$scoreval), digits)
+                                               MODEL()$DATAVALIDATIONMODEL$resvalidationmodel$scoreval), digits),
                   sensibility(MODEL()$DATAVALIDATIONMODEL$resvalidationmodel$predictclassval,MODEL()$DATAVALIDATIONMODEL$resvalidationmodel$classval),
                   specificity(MODEL()$DATAVALIDATIONMODEL$resvalidationmodel$predictclassval,MODEL()$DATAVALIDATIONMODEL$resvalidationmodel$classval)
                   )

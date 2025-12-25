@@ -343,7 +343,7 @@ create_tooltip_html <- function(element_id, label) {
     return(label)
   }
 
-  if (UI_CONFIG$enable_tooltips) {
+  if (UI_CONFIG$enable_tooltips && requireNamespace("bslib", quietly = TRUE)) {
     # Use bslib tooltip
     return(bslib::tooltip(
       label,
@@ -363,6 +363,14 @@ create_help_panel <- function(section_id, style = "info") {
     return(NULL)
   }
 
+  # Convert markdown to HTML if markdown package available
+  if (requireNamespace("markdown", quietly = TRUE)) {
+    html_content <- shiny::HTML(markdown::markdownToHTML(text = help_text, fragment.only = TRUE))
+  } else {
+    # Fallback: use plain text
+    html_content <- shiny::HTML(gsub("\n", "<br/>", help_text))
+  }
+
   shiny::wellPanel(
     style = paste0("background-color: ",
                    switch(style,
@@ -379,7 +387,7 @@ create_help_panel <- function(section_id, style = "info") {
                           "danger" = "#ebccd1",
                           "#ddd"),
                    ";"),
-    shiny::HTML(markdown::markdownToHTML(text = help_text, fragment.only = TRUE))
+    html_content
   )
 }
 
