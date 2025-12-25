@@ -928,105 +928,106 @@ shinyUI(fluidPage(
                                               )
                                             )
                                    )
-                       ),
+                       )
+                       #,
                        #textOutput("testNAstructure"),
                        #hr(),
-                       fluidRow(
-                         column(6,h3("Transform Parameters")),
-                         column(6,h3("Statistics Parameters"))
-                       ),
-                       fluidRow(
-                         column(3,
-                                checkboxGroupInput("rempNAtest", "Replacing NA (Not Attributes) by",
-                                                   c("zero" = "z",
-                                                     "mean of the cohort" = "moy",
-                                                     "mean by group"="moygr",
-                                                     "PCA estimation" = "pca",
-                                                     "Random forest estimation /!\\" = "missforest"),
-                                                   selected = "moygr")
-                         ),
-                         column(3,
-                                #br(),br(),
-                                checkboxGroupInput("logtest","transform data in log",choices = list("TRUE"=TRUE,"FALSE"=FALSE),inline = TRUE,selected = "FALSE"),
-                                radioButtons("logtypetest",label = NULL,c("ln"="logn","log 10"="log10","log2"="log2"),inline = TRUE),
-                                checkboxGroupInput("standardizationtest","standardization dataset",
-                                                   choices = list("TRUE"=TRUE,"FALSE"=FALSE),inline = TRUE,
-                                                   selected = "FALSE"),
-                                checkboxGroupInput("arcsintest","arcsine transformation",choices = list("TRUE"=TRUE,"FALSE"=FALSE),inline = TRUE,selected ="FALSE")
-                         ),
-                         #),
-                         #hr(),
-                         #fluidRow(
-                         column(3,
-                                checkboxGroupInput("testtest", "Tests",
-                                                   #c( "No test"="notest","Wilcoxon Test" = "Wtest","Student Test" = "Ttest"),
-                                                   c( "No test"="notest",
-                                                      "Wilcoxon Test" = "Wtest",
-                                                      "Student Test" = "Ttest",
-                                                      "Clustering + ElasticNet" = "clustEnet",
-                                                      "Lasso" = "lasso",
-                                                      "ElasticNet" = "elasticnet",
-                                                      "Ridge" = "ridge"),
-                                                   selected = "Wtest"),
-                                checkboxGroupInput("adjustpvtest", "adjust p-value " , 
-                                                   choices = list("TRUE"=TRUE,"FALSE"=FALSE),
-                                                   inline = TRUE,
-                                                   selected = "FALSE")
-                         ),
-                         column(3,
-                                numericInput("thresholdFCtest","choise of the Fold change threshold" , 0, min =0, max = 5, step = 0.5),
-                                numericInput("thresholdpvtest","choise of the p-value threshold %" , 0.05, min =0, max = 1, step = 0.01)
-                         )
-                       ),
+                       # fluidRow(
+                       #   column(6,h3("Transform Parameters")),
+                       #   column(6,h3("Statistics Parameters"))
+                       # ),
+                       # fluidRow(
+                       #   column(3,
+                       #          checkboxGroupInput("rempNAtest", "Replacing NA (Not Attributes) by",
+                       #                             c("zero" = "z",
+                       #                               "mean of the cohort" = "moy",
+                       #                               "mean by group"="moygr",
+                       #                               "PCA estimation" = "pca",
+                       #                               "Random forest estimation /!\\" = "missforest"),
+                       #                             selected = "moygr")
+                       #   ),
+                       #   column(3,
+                       #          #br(),br(),
+                       #          checkboxGroupInput("logtest","transform data in log",choices = list("TRUE"=TRUE,"FALSE"=FALSE),inline = TRUE,selected = "FALSE"),
+                       #          radioButtons("logtypetest",label = NULL,c("ln"="logn","log 10"="log10","log2"="log2"),inline = TRUE),
+                       #          checkboxGroupInput("standardizationtest","standardization dataset",
+                       #                             choices = list("TRUE"=TRUE,"FALSE"=FALSE),inline = TRUE,
+                       #                             selected = "FALSE"),
+                       #          checkboxGroupInput("arcsintest","arcsine transformation",choices = list("TRUE"=TRUE,"FALSE"=FALSE),inline = TRUE,selected ="FALSE")
+                       #   ),
+                       #   #),
+                       #   #hr(),
+                       #   #fluidRow(
+                       #   column(3,
+                       #          checkboxGroupInput("testtest", "Tests",
+                       #                             #c( "No test"="notest","Wilcoxon Test" = "Wtest","Student Test" = "Ttest"),
+                       #                             c( "No test"="notest",
+                       #                                "Wilcoxon Test" = "Wtest",
+                       #                                "Student Test" = "Ttest",
+                       #                                "Clustering + ElasticNet" = "clustEnet",
+                       #                                "Lasso" = "lasso",
+                       #                                "ElasticNet" = "elasticnet",
+                       #                                "Ridge" = "ridge"),
+                       #                             selected = "Wtest"),
+                       #          checkboxGroupInput("adjustpvtest", "adjust p-value " , 
+                       #                             choices = list("TRUE"=TRUE,"FALSE"=FALSE),
+                       #                             inline = TRUE,
+                       #                             selected = "FALSE")
+                       #   ),
+                       #   column(3,
+                       #          numericInput("thresholdFCtest","choise of the Fold change threshold" , 0, min =0, max = 5, step = 0.5),
+                       #          numericInput("thresholdpvtest","choise of the p-value threshold %" , 0.05, min =0, max = 1, step = 0.01)
+                       #   )
+                       # ),
                        #hr(),
-                       h3("Model Parameters"),
-                       fluidRow(
-                         column(3,
-                                # checkboxGroupInput("modeltest", "Type of model to adjust", 
-                                #                    c("No model" = "nomodel",
-                                #                      "Random Forest"="randomforest",
-                                #                      "Support Vector Machine" = "svm"),
-                                #                    selected = "svm")
-                                checkboxGroupInput("modeltest", "Type of model to adjust",
-                                                   c("No model" = "nomodel",
-                                                     "Random Forest"="randomforest",
-                                                     "Support Vector Machine" = "svm",
-                                                     "ElasticNet"="elasticnet",
-                                                     "XGBoost"="xgboost",
-                                                     # "LightGBM"="lightgbm",  
-                                                     "K-Nearest Neighbors"="knn",
-                                                     "Naive Bayes"="naivebayes"),
-                                                   selected = "svm")
-                         ),
-                         column(4,
-                                #numericInput("thresholdmodeltest","threshold model" ,0, min = -1, max = 1, step = 0.05),
-                                radioButtons("tuning_method_test", "Hyperparameter tuning:",
-                                             c("Default parameters" = "default",
-                                               "Automatic tuning" = "automatic"),
-                                             selected = "default"),
-                                helpText("Automatic tuning uses model-specific optimization (tune.svm, tuneRF, cv.glmnet, xgb.cv, etc.)"),
-                                checkboxGroupInput("fstest","features selection by cross validation",choices = list("TRUE /!\\"=TRUE,"FALSE"=FALSE),inline = TRUE,selected ="FALSE"),
-                                helpText("/!\\ process can be long"),
-                                radioButtons("threshold_method_test", "Threshold optimization:",
-                                             c("Fixed (0.5 for probabilistic models)" = "fixed",
-                                               "Youden (maximize sensitivity + specificity)" = "youden",
-                                               "Equiprobability (equal error rate)" = "equiprob"),
-                                             selected = "fixed"),
-                                helpText("Threshold calculated on TRAIN data, applied to validation. Youden: optimal balance sens/spec. Equiprobability: minimizes FP=FN. Note: Multiple testing may slightly inflate validation metrics.")
-                         ),
-                         column(5,
-                                p(actionButton("tunetest",h4("Test all models"),width=200),align="center")
-                         )
-                       ),
-                       dataTableOutput("tabtestparameters")%>% withSpinner(color="#0dc5c1",type = 1),
-                       p(downloadButton("downloadtabtestparameters","Download dataset"),align="center"),
-                       # les graphiques pour les différents paramètres
-                       fluidRow(
-                         column(6,
-                                plotOutput("plottestparameterslearning")%>% withSpinner(color="#0dc5c1",type = 1),
-                                p(downloadButton("downloadplottestparameterslearning","Download plot"), align = 'center')
-                         )
-                       )
+                       # h3("Model Parameters"),
+                       # fluidRow(
+                       #   column(3,
+                       #          # checkboxGroupInput("modeltest", "Type of model to adjust", 
+                       #          #                    c("No model" = "nomodel",
+                       #          #                      "Random Forest"="randomforest",
+                       #          #                      "Support Vector Machine" = "svm"),
+                       #          #                    selected = "svm")
+                       #          checkboxGroupInput("modeltest", "Type of model to adjust",
+                       #                             c("No model" = "nomodel",
+                       #                               "Random Forest"="randomforest",
+                       #                               "Support Vector Machine" = "svm",
+                       #                               "ElasticNet"="elasticnet",
+                       #                               "XGBoost"="xgboost",
+                       #                               # "LightGBM"="lightgbm",  
+                       #                               "K-Nearest Neighbors"="knn",
+                       #                               "Naive Bayes"="naivebayes"),
+                       #                             selected = "svm")
+                       #   ),
+                       #   column(4,
+                       #          #numericInput("thresholdmodeltest","threshold model" ,0, min = -1, max = 1, step = 0.05),
+                       #          radioButtons("tuning_method_test", "Hyperparameter tuning:",
+                       #                       c("Default parameters" = "default",
+                       #                         "Automatic tuning" = "automatic"),
+                       #                       selected = "default"),
+                       #          helpText("Automatic tuning uses model-specific optimization (tune.svm, tuneRF, cv.glmnet, xgb.cv, etc.)"),
+                       #          checkboxGroupInput("fstest","features selection by cross validation",choices = list("TRUE /!\\"=TRUE,"FALSE"=FALSE),inline = TRUE,selected ="FALSE"),
+                       #          helpText("/!\\ process can be long"),
+                       #          radioButtons("threshold_method_test", "Threshold optimization:",
+                       #                       c("Fixed (0.5 for probabilistic models)" = "fixed",
+                       #                         "Youden (maximize sensitivity + specificity)" = "youden",
+                       #                         "Equiprobability (equal error rate)" = "equiprob"),
+                       #                       selected = "fixed"),
+                       #          helpText("Threshold calculated on TRAIN data, applied to validation. Youden: optimal balance sens/spec. Equiprobability: minimizes FP=FN. Note: Multiple testing may slightly inflate validation metrics.")
+                       #   ),
+                       #   column(5,
+                       #          p(actionButton("tunetest",h4("Test all models"),width=200),align="center")
+                       #   )
+                       # ),
+                       # dataTableOutput("tabtestparameters")%>% withSpinner(color="#0dc5c1",type = 1),
+                       # p(downloadButton("downloadtabtestparameters","Download dataset"),align="center"),
+                       # # les graphiques pour les différents paramètres
+                       # fluidRow(
+                       #   column(6,
+                       #          plotOutput("plottestparameterslearning")%>% withSpinner(color="#0dc5c1",type = 1),
+                       #          p(downloadButton("downloadplottestparameterslearning","Download plot"), align = 'center')
+                       #   )
+                       # )
       )
     )
   )
