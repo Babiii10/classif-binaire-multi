@@ -188,7 +188,7 @@ shinyServer(function(input, output,session) {
 
     table[3,]<-c("#","name learning file", "number of rows", "number of columns", "class distribution",
              "","name validation file", "number of rows", "number of columns", "class distribution", "")
-    table[4,]<-c("main results",learningfile$name,dim(DATA()$LEARNING)[1],dim(DATA()$LEARNING)[2],
+    table[4,]<-c("main results",learningfile$name,nll(dim(DATA()$LEARNING)[1]),nll(dim(DATA()$LEARNING)[2]),
                  learning_class_summary,"",nll(input$validationfile$name),nll(dim(DATA()$VALIDATION)[1]),
                  nll(dim(DATA()$VALIDATION)[2]),validation_class_summary,"")
     table[5,1:8]<-c("#","percentage of values minimum","method of selection","select features structured","search structur in",
@@ -196,7 +196,7 @@ shinyServer(function(input, output,session) {
     table[6,1:8]<-c("select parameters",selectdataparameters[[1]],selectdataparameters[[2]],selectdataparameters[[3]],
                     selectdataparameters[[4]],selectdataparameters[[5]],selectdataparameters[[6]],selectdataparameters[[7]])
     table[7,1:3]<-c("#","number of feature selected","number of feature structured")
-    table[8,1:3]<-c("main results",dim(SELECTDATA()$LEARNINGSELECT)[2]-1,nll(dim(SELECTDATA()$STRUCTUREDFEATURES)[2]))
+    table[8,1:3]<-c("main results",nll(dim(SELECTDATA()$LEARNINGSELECT)[2]-1),nll(dim(SELECTDATA()$STRUCTUREDFEATURES)[2]))
     table[9,1:5]<-c("#","remplace NA by","transformation log","strandardisation","arcsin transformation")
     if(transformdataparameters[[1]]=="FALSE"){logprint<-"FALSE"}
     else{logprint<-transformdataparameters[[2]]}
@@ -206,7 +206,7 @@ shinyServer(function(input, output,session) {
     table[13,1:5]<-c("#","test","use Bonferroni adjustment","threshold of significativity","Fold change threshold")
     table[14,1:5]<-c("test parameters",input$test,input$adjustpv,input$thresholdpv,input$thresholdFC)
     table[15,1:2]<-c("#","number of differently expressed features")
-    table[16,1:2]<-c("main results",dim(TEST()$LEARNINGDIFF)[2]-1)
+    table[16,1:2]<-c("main results",nll(dim(TEST()$LEARNINGDIFF)[2]-1))
 
     if(input$model!="nomodel"){
       table[17,1:6]<-c("#","model type","cut-off of the model","feature selection","apply model on validation","invers groups")
@@ -231,7 +231,7 @@ shinyServer(function(input, output,session) {
 #                  sensibility(MODEL()$DATAVALIDATIONMODEL$resvalidationmodel$classval,MODEL()$DATAVALIDATIONMODEL$resvalidationmodel$predictclassval),
 #                  specificity(MODEL()$DATAVALIDATIONMODEL$resvalidationmodel$classval,MODEL()$DATAVALIDATIONMODEL$resvalidationmodel$predictclassval)
 #       )
-      table[20,1:5]<-c("main results",dim(MODEL()$DATALEARNINGMODEL$learningmodel)[2]-1,
+      table[20,1:5]<-c("main results",nll(dim(MODEL()$DATALEARNINGMODEL$learningmodel)[2]-1),
                   #round(as.numeric(auc(roc(MODEL()$DATALEARNINGMODEL$reslearningmodel$classlearning,MODEL()$DATALEARNINGMODEL$reslearningmodel$scorelearning))),digits = 3),
                   round(calculate_multiclass_auc(MODEL()$DATALEARNINGMODEL$reslearningmodel$classlearning,
                                MODEL()$DATALEARNINGMODEL$reslearningmodel$scorelearning), digits = 3),
