@@ -506,7 +506,7 @@ observeEvent(input$run_validation, {
 
       # Run validation
       results <- validate_data_quality(
-        data = DATA,
+        data = DATA()$LEARNING,
         verbose = TRUE
       )
 
