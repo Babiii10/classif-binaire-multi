@@ -37,7 +37,31 @@ shinyUI(fluidPage(
   hr(nrow = 2),
   sidebarLayout(
     sidebarPanel(
-      wellPanel( 
+
+      # Analysis Preset Selector
+      wellPanel(
+        style = "background-color: #ecf0f1; border-left: 4px solid #3498db;",
+        h4("🎯 Analysis Preset", style = "margin-top: 0;"),
+        selectInput("analysis_preset",
+                    label = NULL,
+                    choices = c(
+                      "Quick (~5 min)" = "quick",
+                      "Standard (~15-20 min) ⭐" = "standard",
+                      "Robust (~30-40 min)" = "robust",
+                      "Publication (~60-90 min)" = "publication",
+                      "Exploratory (~45-60 min)" = "exploratory",
+                      "Production (~20-30 min)" = "production",
+                      "Custom" = "custom"
+                    ),
+                    selected = "standard"),
+        conditionalPanel(condition = "input.analysis_preset != 'custom'",
+                         uiOutput("preset_description")),
+        conditionalPanel(condition = "input.analysis_preset == 'custom'",
+                         p(style = "color: gray; font-size: 0.9em;",
+                           "Configure manually below"))
+      ),
+
+      wellPanel(
         conditionalPanel(condition ="input.confirmdatabutton==0" ,
                          radioButtons("analysis","",c("new analysis","previous analysis"),inline=T),
                          conditionalPanel( condition="input.analysis=='previous analysis' ",     
@@ -151,7 +175,43 @@ shinyUI(fluidPage(
                                                                column(7,imageOutput("image3",width = "100%")))
                                             ),
                                             dataTableOutput("JDDlearn")%>% withSpinner(color="#0dc5c1",type = 1),
-                                            p(downloadButton("downloaddataJDDlearn","Download dataset"),align="center")
+                                            p(downloadButton("downloaddataJDDlearn","Download dataset"),align="center"),
+
+                                            # Data Quality Validation
+                                            hr(),
+                                            h4("✓ Data Quality Validation", style = "color: #2c3e50; margin-top: 20px;"),
+                                            fluidRow(
+                                              column(3,
+                                                     actionButton("run_validation",
+                                                                  label = "Validate Data Quality",
+                                                                  icon = icon("check-circle"),
+                                                                  style = "background-color: #3498db; color: white; width: 100%;"),
+                                                     br(), br(),
+                                                     conditionalPanel(condition = "output.validation_complete",
+                                                                      uiOutput("validation_summary"))
+                                              ),
+                                              column(9,
+                                                     conditionalPanel(condition = "output.validation_complete",
+                                                                      tabsetPanel(id = "validation_tabs",
+                                                                                  tabPanel("Issues",
+                                                                                           br(),
+                                                                                           uiOutput("validation_issues_ui")
+                                                                                  ),
+                                                                                  tabPanel("Details",
+                                                                                           br(),
+                                                                                           verbatimTextOutput("validation_details")
+                                                                                  ),
+                                                                                  tabPanel("Report",
+                                                                                           br(),
+                                                                                           p("Download detailed validation report:"),
+                                                                                           downloadButton("download_validation_report",
+                                                                                                          "Download HTML Report",
+                                                                                                          style = "width: 200px;")
+                                                                                  )
+                                                                      )
+                                                     )
+                                              )
+                                            )
                                    ),
                                    tabPanel("Validation Data", icon = icon("check"),
                                             conditionalPanel(condition ="output.fileUploadedval",
@@ -698,6 +758,89 @@ shinyUI(fluidPage(
                                                              checkboxInput("adjustval","Adjust model on validation data",F)
                                             )
                                             ,
+                                            hr(),
+
+                                            # Advanced Model Options (AutoML & Ensemble)
+                                            h4("🚀 Advanced Model Options", style = "color: #2c3e50; margin-top: 20px;"),
+                                            fluidRow(
+                                              column(6,
+                                                     wellPanel(
+                                                       style = "background-color: #e8f5e9; border-left: 4px solid #4caf50;",
+                                                       h5("🤖 AutoML - Automatic Model Selection"),
+                                                       p("Automatically test multiple models and select the best one."),
+                                                       numericInput("automl_time_budget",
+                                                                    "Time budget (minutes):",
+                                                                    value = 15,
+                                                                    min = 5,
+                                                                    max = 120,
+                                                                    step = 5),
+                                                       checkboxGroupInput("automl_models",
+                                                                          "Models to test:",
+                                                                          choices = c(
+                                                                            "Random Forest" = "randomforest",
+                                                                            "XGBoost" = "xgboost",
+                                                                            "SVM" = "svm",
+                                                                            "ElasticNet" = "elasticnet",
+                                                                            "KNN" = "knn"
+                                                                          ),
+                                                                          selected = c("randomforest", "xgboost", "svm", "elasticnet")),
+                                                       actionButton("run_automl",
+                                                                    label = "Run AutoML",
+                                                                    icon = icon("magic"),
+                                                                    style = "background-color: #4caf50; color: white; width: 100%;"),
+                                                       br(), br(),
+                                                       uiOutput("automl_status")
+                                                     )
+                                              ),
+                                              column(6,
+                                                     wellPanel(
+                                                       style = "background-color: #e3f2fd; border-left: 4px solid #2196f3;",
+                                                       h5("🎯 Ensemble - Combine Multiple Models"),
+                                                       p("Combine predictions from multiple models for better accuracy."),
+                                                       selectInput("ensemble_method",
+                                                                   "Ensemble method:",
+                                                                   choices = c(
+                                                                     "Voting (Majority)" = "voting",
+                                                                     "Weighted Voting" = "weighted_voting",
+                                                                     "Averaging (Probabilities)" = "averaging",
+                                                                     "Weighted Averaging" = "weighted_averaging",
+                                                                     "Stacking (Meta-learner)" = "stacking"
+                                                                   ),
+                                                                   selected = "averaging"),
+                                                       checkboxGroupInput("ensemble_models",
+                                                                          "Models to combine:",
+                                                                          choices = c(
+                                                                            "Random Forest" = "randomforest",
+                                                                            "XGBoost" = "xgboost",
+                                                                            "SVM" = "svm",
+                                                                            "ElasticNet" = "elasticnet"
+                                                                          ),
+                                                                          selected = c("randomforest", "xgboost")),
+                                                       actionButton("create_ensemble",
+                                                                    label = "Create Ensemble",
+                                                                    icon = icon("layer-group"),
+                                                                    style = "background-color: #2196f3; color: white; width: 100%;"),
+                                                       br(), br(),
+                                                       uiOutput("ensemble_status")
+                                                     )
+                                              )
+                                            ),
+                                            conditionalPanel(condition = "output.automl_complete || output.ensemble_complete",
+                                                             hr(),
+                                                             h4("📊 Advanced Model Results"),
+                                                             fluidRow(
+                                                               column(12,
+                                                                      conditionalPanel(condition = "output.automl_complete",
+                                                                                       h5("AutoML Results:"),
+                                                                                       tableOutput("automl_results_table"),
+                                                                                       br()),
+                                                                      conditionalPanel(condition = "output.ensemble_complete",
+                                                                                       h5("Ensemble Results:"),
+                                                                                       tableOutput("ensemble_results_table"))
+                                                               )
+                                                             )
+                                            ),
+
                                             hr(),
                                             conditionalPanel(condition ="input.model!='nomodel'  ",
                                                              fluidRow(
