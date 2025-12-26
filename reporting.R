@@ -26,10 +26,10 @@ generate_analysis_report <- function(analysis_results, output_file = "analysis_r
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Rapport d\\'Analyse de Classification</title>
+    <title>Rapport d''Analyse de Classification</title>
     <style>
         body {
-            font-family: \\'Segoe UI\\', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: ''Segoe UI'', Tahoma, Geneva, Verdana, sans-serif;
             line-height: 1.6;
             color: #333;
             max-width: 1200px;
