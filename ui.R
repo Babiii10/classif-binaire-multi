@@ -87,12 +87,17 @@ shinyUI(fluidPage(
         )
       ),
 
+      # Performance Settings Toggle Button
+      actionButton("show_performance_settings",
+                   "⚙️ Performance Settings",
+                   style = "width: 100%; margin-bottom: 10px; background-color: #607d8b; color: white;"),
+
       # Performance Settings (collapsible)
       conditionalPanel(
-        condition = "input.show_performance_settings",
+        condition = "input.show_performance_settings % 2 == 1",
         wellPanel(
           style = "background-color: #f0f0f0; border-left: 4px solid #607d8b;",
-          h5("⚙️ Performance Settings", style = "margin-top: 0;"),
+          h5("Performance Settings", style = "margin-top: 0;"),
           checkboxInput("enable_parallel_processing",
                         "Enable parallel processing",
                         value = FALSE),
@@ -111,12 +116,6 @@ shinyUI(fluidPage(
             icon("bolt"), " Parallel processing speeds up grid search, bootstrap, and cross-validation")
         )
       ),
-      actionButton("show_performance_settings",
-                   ifelse(!is.null(input$show_performance_settings) && input$show_performance_settings %% 2 == 1,
-                          "Hide Performance Settings",
-                          "Show Performance Settings"),
-                   style = "width: 100%; margin-bottom: 10px; background-color: #607d8b; color: white;",
-                   icon = icon("cog")),
 
       wellPanel(
         conditionalPanel(condition ="input.confirmdatabutton==0" ,
