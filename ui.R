@@ -61,6 +61,63 @@ shinyUI(fluidPage(
                            "Configure manually below"))
       ),
 
+      # Quick Start Guide (collapsible)
+      conditionalPanel(
+        condition = "!output.quick_start_dismissed",
+        wellPanel(
+          style = "background-color: #e7f3ff; border-left: 4px solid #007bff;",
+          fluidRow(
+            column(10, h4("🚀 Quick Start Guide", style = "margin-top: 0;")),
+            column(2, actionButton("dismiss_quick_start", "×",
+                                   style = "float: right; background: none; border: none; font-size: 20px; padding: 0;"))
+          ),
+          p(style = "font-size: 0.9em; color: #555;",
+            "Follow these steps for a complete analysis:"),
+          tags$ol(
+            style = "font-size: 0.85em; padding-left: 20px; margin-bottom: 10px;",
+            tags$li(tags$strong("Import Data:"), " Upload learning file (required) and validation file (optional)"),
+            tags$li(tags$strong("Select Variables:"), " Filter out variables with too many missing values"),
+            tags$li(tags$strong("Transform Data:"), " Handle missing values and apply transformations"),
+            tags$li(tags$strong("Statistical Tests:"), " Select discriminant features"),
+            tags$li(tags$strong("Train Model:"), " Choose and optimize a classifier"),
+            tags$li(tags$strong("Evaluate:"), " Check performance metrics and ROC curves")
+          ),
+          p(style = "font-size: 0.8em; color: gray; margin-bottom: 0;",
+            icon("info-circle"), " Use the Analysis Preset above for recommended settings")
+        )
+      ),
+
+      # Performance Settings (collapsible)
+      conditionalPanel(
+        condition = "input.show_performance_settings",
+        wellPanel(
+          style = "background-color: #f0f0f0; border-left: 4px solid #607d8b;",
+          h5("⚙️ Performance Settings", style = "margin-top: 0;"),
+          checkboxInput("enable_parallel_processing",
+                        "Enable parallel processing",
+                        value = FALSE),
+          conditionalPanel(
+            condition = "input.enable_parallel_processing",
+            sliderInput("n_cores_parallel",
+                        "Number of CPU cores:",
+                        min = 1,
+                        max = parallel::detectCores(),
+                        value = max(1, parallel::detectCores() - 1),
+                        step = 1),
+            p(style = "font-size: 0.85em; color: gray;",
+              sprintf("Your system has %d cores available", parallel::detectCores()))
+          ),
+          p(style = "font-size: 0.8em; color: gray; margin-bottom: 0;",
+            icon("bolt"), " Parallel processing speeds up grid search, bootstrap, and cross-validation")
+        )
+      ),
+      actionButton("show_performance_settings",
+                   ifelse(!is.null(input$show_performance_settings) && input$show_performance_settings %% 2 == 1,
+                          "Hide Performance Settings",
+                          "Show Performance Settings"),
+                   style = "width: 100%; margin-bottom: 10px; background-color: #607d8b; color: white;",
+                   icon = icon("cog")),
+
       wellPanel(
         conditionalPanel(condition ="input.confirmdatabutton==0" ,
                          radioButtons("analysis","",c("new analysis","previous analysis"),inline=T),
@@ -1023,6 +1080,68 @@ shinyUI(fluidPage(
                                                                           h5("💡 Suggestions to Reduce Overfitting:"),
                                                                           uiOutput("overfitting_suggestions_text")
                                                                       )
+                                                               )
+                                                             )
+                                            ),
+
+                                            # Model Interpretability Section
+                                            hr(),
+                                            h4("🔍 Model Interpretation", style = "color: #2c3e50; margin-top: 20px;"),
+                                            p("Understand your model's predictions using SHAP values and feature importance analysis."),
+                                            fluidRow(
+                                              column(4,
+                                                     wellPanel(
+                                                       style = "background-color: #e8f5e9; border-left: 4px solid #4caf50;",
+                                                       h5("📊 SHAP Analysis"),
+                                                       p("Calculate SHAP (SHapley Additive exPlanations) values to understand feature contributions to predictions."),
+                                                       numericInput("shap_nsim", "Number of simulations:", value = 50, min = 10, max = 500, step = 10),
+                                                       numericInput("shap_sample_size", "Background sample size:", value = 100, min = 10, max = 500, step = 10),
+                                                       actionButton("calculate_shap",
+                                                                    label = "Calculate SHAP Values",
+                                                                    icon = icon("chart-bar"),
+                                                                    style = "background-color: #4caf50; color: white; width: 100%;")
+                                                     )
+                                              ),
+                                              column(4,
+                                                     wellPanel(
+                                                       style = "background-color: #e3f2fd; border-left: 4px solid #2196f3;",
+                                                       h5("🎯 Permutation Importance"),
+                                                       p("Calculate permutation-based feature importance by measuring accuracy drop when features are shuffled."),
+                                                       numericInput("perm_n_repeats", "Number of repeats:", value = 10, min = 3, max = 50, step = 5),
+                                                       actionButton("calculate_permutation",
+                                                                    label = "Calculate Permutation Importance",
+                                                                    icon = icon("random"),
+                                                                    style = "background-color: #2196f3; color: white; width: 100%;")
+                                                     )
+                                              ),
+                                              column(4,
+                                                     wellPanel(
+                                                       style = "background-color: #fff3e0; border-left: 4px solid #ff9800;",
+                                                       h5("📄 Export Results"),
+                                                       p("Generate comprehensive interpretation report with all explanations."),
+                                                       conditionalPanel(condition = "output.interpretation_ready",
+                                                                        uiOutput("interpretation_status"),
+                                                                        br(),
+                                                                        downloadButton("download_interpretation_report",
+                                                                                       "Download HTML Report",
+                                                                                       style = "width: 100%;")
+                                                       )
+                                                     )
+                                              )
+                                            ),
+                                            conditionalPanel(condition = "output.interpretation_ready",
+                                                             fluidRow(
+                                                               column(6,
+                                                                      h5("Feature Importance Plot"),
+                                                                      plotOutput("plot_interpretation_importance", height = 400) %>% withSpinner(color="#0dc5c1",type = 1),
+                                                                      br(),
+                                                                      downloadButton("download_importance_plot", "Download Plot")
+                                                               ),
+                                                               column(6,
+                                                                      h5("Top Features Table"),
+                                                                      tableOutput("table_interpretation_features"),
+                                                                      br(),
+                                                                      downloadButton("download_importance_table", "Download Table")
                                                                )
                                                              )
                                             )

@@ -900,8 +900,497 @@ output$ensemble_results_table <- renderTable({
 })
 
 ################################################################################
+# PHASE 3: TOOLTIPS & HELP SYSTEM
+################################################################################
+
+# Reactive value for quick start guide dismissal
+quick_start_state <- reactiveValues(
+  dismissed = FALSE
+)
+
+# Handler: Dismiss quick start guide
+observeEvent(input$dismiss_quick_start, {
+  quick_start_state$dismissed <- TRUE
+})
+
+# Output: Quick start dismissed flag
+output$quick_start_dismissed <- reactive({
+  quick_start_state$dismissed
+})
+outputOptions(output, "quick_start_dismissed", suspendWhenHidden = FALSE)
+
+################################################################################
+# PHASE 3: PARALLEL PROCESSING MANAGEMENT
+################################################################################
+
+# Reactive value for parallel processing state
+parallel_state <- reactiveValues(
+  initialized = FALSE,
+  active = FALSE,
+  n_cores = 1
+)
+
+# Observer: Initialize/stop parallel processing
+observeEvent(input$enable_parallel_processing, {
+  if (input$enable_parallel_processing) {
+    # Enable parallel processing
+
+    withProgress(message = 'Initializing parallel backend...', value = 0, {
+
+      tryCatch({
+
+        incProgress(0.5, detail = "Setting up worker cores...")
+
+        # Get number of cores from input, or use default
+        n_cores <- if(!is.null(input$n_cores_parallel)) {
+          input$n_cores_parallel
+        } else {
+          max(1, parallel::detectCores() - 1)
+        }
+
+        # Update PERFORMANCE config
+        PERFORMANCE$enable_parallel <- TRUE
+        PERFORMANCE$n_cores <- n_cores
+
+        # Initialize parallel backend
+        success <- init_parallel(n_cores = n_cores)
+
+        if (success) {
+          parallel_state$initialized <- TRUE
+          parallel_state$active <- TRUE
+          parallel_state$n_cores <- n_cores
+
+          showNotification(
+            sprintf("Parallel processing enabled with %d cores", n_cores),
+            type = "message",
+            duration = 5
+          )
+        } else {
+          showNotification(
+            "Failed to initialize parallel processing",
+            type = "warning",
+            duration = 5
+          )
+        }
+
+        incProgress(1.0)
+
+      }, error = function(e) {
+        showNotification(
+          paste("Parallel initialization error:", e$message),
+          type = "error",
+          duration = 10
+        )
+      })
+
+    })
+
+  } else {
+    # Disable parallel processing
+
+    tryCatch({
+      stop_parallel()
+
+      parallel_state$active <- FALSE
+
+      PERFORMANCE$enable_parallel <- FALSE
+
+      showNotification(
+        "Parallel processing disabled",
+        type = "message",
+        duration = 3
+      )
+    }, error = function(e) {
+      showNotification(
+        paste("Error stopping parallel backend:", e$message),
+        type = "warning",
+        duration = 5
+      )
+    })
+  }
+})
+
+# Observer: Update number of cores
+observeEvent(input$n_cores_parallel, {
+  if (input$enable_parallel_processing && parallel_state$active) {
+    # Reinitialize with new number of cores
+
+    tryCatch({
+      stop_parallel()
+
+      n_cores <- input$n_cores_parallel
+      PERFORMANCE$n_cores <- n_cores
+
+      success <- init_parallel(n_cores = n_cores)
+
+      if (success) {
+        parallel_state$n_cores <- n_cores
+
+        showNotification(
+          sprintf("Updated to %d cores", n_cores),
+          type = "message",
+          duration = 3
+        )
+      }
+
+    }, error = function(e) {
+      showNotification(
+        paste("Error updating cores:", e$message),
+        type = "warning",
+        duration = 5
+      )
+    })
+  }
+})
+
+################################################################################
+# PHASE 3: MODEL INTERPRETABILITY (SHAP/LIME)
+################################################################################
+
+# Reactive values for interpretation results
+interpretation_results <- reactiveValues(
+  complete = FALSE,
+  shap_results = NULL,
+  permutation_results = NULL,
+  report_path = NULL,
+  method = NULL
+)
+
+# Handler: Calculate SHAP values
+observeEvent(input$calculate_shap, {
+  req(MODEL)
+  req(TRANSFORMDATA)
+
+  withProgress(message = 'Calculating SHAP values...', value = 0, {
+    tryCatch({
+
+      incProgress(0.2, detail = "Preparing data...")
+
+      # Get model type
+      model_type <- if(!is.null(input$model)) input$model else "randomforest"
+
+      incProgress(0.4, detail = "Calculating SHAP values...")
+
+      # Calculate SHAP
+      shap_result <- calculate_shap(
+        model = MODEL,
+        data = TRANSFORMDATA,
+        newdata = NULL,
+        model_type = model_type,
+        nsim = input$shap_nsim,
+        sample_size = input$shap_sample_size
+      )
+
+      incProgress(0.8, detail = "Generating visualizations...")
+
+      if (!is.null(shap_result)) {
+        interpretation_results$shap_results <- shap_result
+        interpretation_results$complete <- TRUE
+        interpretation_results$method <- "SHAP"
+
+        showNotification(
+          "SHAP values calculated successfully!",
+          type = "message",
+          duration = 5
+        )
+      } else {
+        showNotification(
+          "SHAP calculation returned no results. Optional packages (fastshap, DALEX) may be missing.",
+          type = "warning",
+          duration = 10
+        )
+      }
+
+      incProgress(1.0)
+
+    }, error = function(e) {
+      showNotification(
+        paste("SHAP calculation failed:", e$message),
+        type = "error",
+        duration = 10
+      )
+    })
+  })
+})
+
+# Handler: Calculate permutation importance
+observeEvent(input$calculate_permutation, {
+  req(MODEL)
+  req(TRANSFORMDATA)
+
+  withProgress(message = 'Calculating permutation importance...', value = 0, {
+    tryCatch({
+
+      incProgress(0.2, detail = "Preparing data...")
+
+      # Get model type
+      model_type <- if(!is.null(input$model)) input$model else "randomforest"
+
+      incProgress(0.4, detail = "Running permutation tests...")
+
+      # Calculate permutation importance
+      perm_result <- calculate_permutation_importance(
+        model = MODEL,
+        data = TRANSFORMDATA,
+        model_type = model_type,
+        n_repeats = input$perm_n_repeats
+      )
+
+      incProgress(0.9, detail = "Processing results...")
+
+      if (!is.null(perm_result)) {
+        interpretation_results$permutation_results <- perm_result
+        interpretation_results$complete <- TRUE
+        interpretation_results$method <- "Permutation"
+
+        showNotification(
+          "Permutation importance calculated successfully!",
+          type = "message",
+          duration = 5
+        )
+      } else {
+        showNotification(
+          "Permutation importance calculation returned no results.",
+          type = "warning",
+          duration = 10
+        )
+      }
+
+      incProgress(1.0)
+
+    }, error = function(e) {
+      showNotification(
+        paste("Permutation importance calculation failed:", e$message),
+        type = "error",
+        duration = 10
+      )
+    })
+  })
+})
+
+# Output: Interpretation ready flag
+output$interpretation_ready <- reactive({
+  interpretation_results$complete
+})
+outputOptions(output, "interpretation_ready", suspendWhenHidden = FALSE)
+
+# Output: Interpretation status
+output$interpretation_status <- renderUI({
+  if (interpretation_results$complete) {
+    method_text <- ifelse(!is.null(interpretation_results$method),
+                          interpretation_results$method,
+                          "Analysis")
+
+    tags$div(
+      style = "color: green; font-weight: bold; padding: 10px; background-color: #d4edda; border-radius: 4px;",
+      icon("check-circle"),
+      sprintf(" %s complete!", method_text)
+    )
+  } else {
+    tags$div(
+      style = "color: gray;",
+      "Click a button above to start analysis"
+    )
+  }
+})
+
+# Output: Feature importance plot
+output$plot_interpretation_importance <- renderPlot({
+  req(interpretation_results$complete)
+
+  tryCatch({
+
+    # Get results based on method
+    if (!is.null(interpretation_results$shap_results)) {
+      # SHAP feature importance
+      result <- interpretation_results$shap_results
+
+      if (!is.null(result$plots) && !is.null(result$plots$feature_importance)) {
+        return(result$plots$feature_importance)
+      } else if (!is.null(result$feature_importance)) {
+        # Create plot manually
+        top_features <- head(result$feature_importance, 20)
+
+        ggplot(top_features, aes(x = reorder(feature, importance), y = importance)) +
+          geom_bar(stat = "identity", fill = "steelblue") +
+          coord_flip() +
+          labs(
+            title = "SHAP Feature Importance",
+            subtitle = "Mean absolute SHAP values",
+            x = "Feature",
+            y = "Mean |SHAP value|"
+          ) +
+          theme_minimal() +
+          theme(
+            plot.title = element_text(size = 14, face = "bold"),
+            axis.text = element_text(size = 10)
+          )
+      }
+
+    } else if (!is.null(interpretation_results$permutation_results)) {
+      # Permutation importance
+      result <- interpretation_results$permutation_results
+      top_features <- head(result, 20)
+
+      ggplot(top_features, aes(x = reorder(feature, importance), y = importance)) +
+        geom_bar(stat = "identity", fill = "#2196f3") +
+        coord_flip() +
+        labs(
+          title = "Permutation Feature Importance",
+          subtitle = "Drop in accuracy when feature is shuffled",
+          x = "Feature",
+          y = "Importance (Accuracy Drop)"
+        ) +
+        theme_minimal() +
+        theme(
+          plot.title = element_text(size = 14, face = "bold"),
+          axis.text = element_text(size = 10)
+        )
+    }
+
+  }, error = function(e) {
+    plot.new()
+    text(0.5, 0.5, paste("Error creating plot:", e$message), col = "red")
+  })
+})
+
+# Output: Top features table
+output$table_interpretation_features <- renderTable({
+  req(interpretation_results$complete)
+
+  if (!is.null(interpretation_results$shap_results)) {
+    # SHAP feature importance table
+    result <- interpretation_results$shap_results$feature_importance
+    if (!is.null(result)) {
+      top_10 <- head(result, 10)
+      top_10$importance <- round(top_10$importance, 4)
+      colnames(top_10) <- c("Feature", "Importance")
+      return(top_10)
+    }
+  } else if (!is.null(interpretation_results$permutation_results)) {
+    # Permutation importance table
+    result <- interpretation_results$permutation_results
+    top_10 <- head(result, 10)
+    top_10$importance <- round(top_10$importance, 4)
+    colnames(top_10) <- c("Feature", "Importance")
+    return(top_10)
+  }
+
+  return(NULL)
+})
+
+# Download handler: Interpretation report
+output$download_interpretation_report <- downloadHandler(
+  filename = function() {
+    paste0("interpretation_report_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".html")
+  },
+  content = function(file) {
+
+    withProgress(message = 'Generating interpretation report...', value = 0, {
+
+      tryCatch({
+
+        incProgress(0.3, detail = "Collecting results...")
+
+        # Prepare results
+        results <- list()
+        if (!is.null(interpretation_results$shap_results)) {
+          results$shap <- interpretation_results$shap_results
+        }
+        if (!is.null(interpretation_results$permutation_results)) {
+          results$permutation <- interpretation_results$permutation_results
+        }
+
+        incProgress(0.6, detail = "Generating HTML report...")
+
+        # Get model type
+        model_type <- if(!is.null(input$model)) input$model else "unknown"
+
+        # Generate report
+        generate_interpretation_report(
+          results = results,
+          output_file = file,
+          model_type = model_type
+        )
+
+        incProgress(1.0)
+
+      }, error = function(e) {
+        showNotification(
+          paste("Report generation failed:", e$message),
+          type = "error",
+          duration = 10
+        )
+      })
+
+    })
+  }
+)
+
+# Download handler: Importance plot
+output$download_importance_plot <- downloadHandler(
+  filename = function() {
+    paste0("feature_importance_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".png")
+  },
+  content = function(file) {
+    req(interpretation_results$complete)
+
+    # Create plot
+    p <- NULL
+
+    if (!is.null(interpretation_results$shap_results)) {
+      result <- interpretation_results$shap_results
+      if (!is.null(result$plots) && !is.null(result$plots$feature_importance)) {
+        p <- result$plots$feature_importance
+      }
+    } else if (!is.null(interpretation_results$permutation_results)) {
+      result <- interpretation_results$permutation_results
+      top_features <- head(result, 20)
+
+      p <- ggplot(top_features, aes(x = reorder(feature, importance), y = importance)) +
+        geom_bar(stat = "identity", fill = "#2196f3") +
+        coord_flip() +
+        labs(
+          title = "Permutation Feature Importance",
+          x = "Feature",
+          y = "Importance"
+        ) +
+        theme_minimal()
+    }
+
+    if (!is.null(p)) {
+      ggsave(file, plot = p, width = 10, height = 8, dpi = 300)
+    }
+  }
+)
+
+# Download handler: Importance table
+output$download_importance_table <- downloadHandler(
+  filename = function() {
+    paste0("feature_importance_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".csv")
+  },
+  content = function(file) {
+    req(interpretation_results$complete)
+
+    table_data <- NULL
+
+    if (!is.null(interpretation_results$shap_results)) {
+      table_data <- interpretation_results$shap_results$feature_importance
+    } else if (!is.null(interpretation_results$permutation_results)) {
+      table_data <- interpretation_results$permutation_results
+    }
+
+    if (!is.null(table_data)) {
+      write.csv(table_data, file, row.names = FALSE)
+    }
+  }
+)
+
+################################################################################
 # END OF SERVER ENHANCEMENTS - PHASE 2
 ################################################################################
 
 message("✓ Server enhancements loaded - Phase 1 (SMOTE, Export, Reporting, Overfitting)")
 message("✓ Server enhancements loaded - Phase 2 (Validation, Presets, AutoML, Ensemble)")
+message("✓ Server enhancements loaded - Phase 3 (Tooltips, Parallel, Interpretability)")
+message("Total enhancements: 11 modules integrated")
