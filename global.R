@@ -145,6 +145,42 @@ tryCatch({
   warning(paste("Could not load ui_wizard.R:", e$message))
 })
 
+##########################
+# Load Medium Priority Enhancements
+##########################
+
+# Load interpretability module (SHAP/LIME)
+tryCatch({
+  source("interpretability.R", local = TRUE)
+  message("✓ Interpretability module loaded (SHAP/LIME)")
+}, error = function(e) {
+  warning(paste("Could not load interpretability.R:", e$message))
+})
+
+# Load model export module (PMML)
+tryCatch({
+  source("model_export.R", local = TRUE)
+  message("✓ Model export module loaded (PMML/RDS/JSON)")
+}, error = function(e) {
+  warning(paste("Could not load model_export.R:", e$message))
+})
+
+# Load SMOTE & imbalance handling
+tryCatch({
+  source("smote.R", local = TRUE)
+  message("✓ SMOTE & imbalance handling loaded")
+}, error = function(e) {
+  warning(paste("Could not load smote.R:", e$message))
+})
+
+# Load preset configurations
+tryCatch({
+  source("presets.R", local = TRUE)
+  message("✓ Preset configurations loaded")
+}, error = function(e) {
+  warning(paste("Could not load presets.R:", e$message))
+})
+
 message("===== Module loading complete =====")
 
 ##########################
