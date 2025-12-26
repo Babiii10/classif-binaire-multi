@@ -504,7 +504,7 @@ generate_validation_report_html <- function(validation_results, output_file = "v
         %s
     </div>
 
-    <h2>5. Taille d''Échantillon</h2>
+    <h2>5. Taille de l&#39;Échantillon</h2>
     <div class="metric">
         <div class="metric-title">Échantillons : %d | Features : %d | Ratio : %.2f</div>
         <p><strong>Classe minoritaire :</strong> %d échantillons</p>

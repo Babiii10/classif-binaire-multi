@@ -336,6 +336,9 @@ overfitting_analysis <- reactiveValues(
 # Automatic overfitting detection after model training
 observe({
 
+  # Check if STATISTICS exists first
+  if (!exists("STATISTICS", inherits = FALSE)) return(NULL)
+
   # Trigger when model results are available
   req(STATISTICS)
   req(STATISTICS$auclearn)
