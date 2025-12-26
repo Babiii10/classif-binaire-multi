@@ -101,6 +101,50 @@ tryCatch({
   warning(paste("Could not load tooltips.R:", e$message))
 })
 
+##########################
+# Load Priority Enhancements
+##########################
+
+# Load data validation system
+tryCatch({
+  source("data_validation.R", local = TRUE)
+  message("✓ Data validation system loaded")
+}, error = function(e) {
+  warning(paste("Could not load data_validation.R:", e$message))
+})
+
+# Load reporting system
+tryCatch({
+  source("reporting.R", local = TRUE)
+  message("✓ Reporting system loaded")
+}, error = function(e) {
+  warning(paste("Could not load reporting.R:", e$message))
+})
+
+# Load AutoML system
+tryCatch({
+  source("automl.R", local = TRUE)
+  message("✓ AutoML system loaded")
+}, error = function(e) {
+  warning(paste("Could not load automl.R:", e$message))
+})
+
+# Load overfitting detection
+tryCatch({
+  source("overfitting_detection.R", local = TRUE)
+  message("✓ Overfitting detection loaded")
+}, error = function(e) {
+  warning(paste("Could not load overfitting_detection.R:", e$message))
+})
+
+# Load UI wizard
+tryCatch({
+  source("ui_wizard.R", local = TRUE)
+  message("✓ UI Wizard loaded")
+}, error = function(e) {
+  warning(paste("Could not load ui_wizard.R:", e$message))
+})
+
 message("===== Module loading complete =====")
 
 ##########################
