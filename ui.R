@@ -37,7 +37,88 @@ shinyUI(fluidPage(
   hr(nrow = 2),
   sidebarLayout(
     sidebarPanel(
-      wellPanel( 
+
+      # Analysis Preset Selector
+      wellPanel(
+        style = "background-color: #ecf0f1; border-left: 4px solid #3498db;",
+        h4("🎯 Analysis Preset", style = "margin-top: 0;"),
+        selectInput("analysis_preset",
+                    label = NULL,
+                    choices = c(
+                      "Quick (~5 min)" = "quick",
+                      "Standard (~15-20 min) ⭐" = "standard",
+                      "Robust (~30-40 min)" = "robust",
+                      "Publication (~60-90 min)" = "publication",
+                      "Exploratory (~45-60 min)" = "exploratory",
+                      "Production (~20-30 min)" = "production",
+                      "Custom" = "custom"
+                    ),
+                    selected = "standard"),
+        conditionalPanel(condition = "input.analysis_preset != 'custom'",
+                         uiOutput("preset_description")),
+        conditionalPanel(condition = "input.analysis_preset == 'custom'",
+                         p(style = "color: gray; font-size: 0.9em;",
+                           "Configure manually below"))
+      ),
+
+      # Quick Start Guide (collapsible)
+      conditionalPanel(
+        condition = "!output.quick_start_dismissed",
+        wellPanel(
+          style = "background-color: #e7f3ff; border-left: 4px solid #007bff;",
+          fluidRow(
+            column(10, h4("🚀 Quick Start Guide", style = "margin-top: 0;")),
+            column(2, actionButton("dismiss_quick_start", "×",
+                                   style = "float: right; background: none; border: none; font-size: 20px; padding: 0;"))
+          ),
+          p(style = "font-size: 0.9em; color: #555;",
+            "Follow these steps for a complete analysis:"),
+          tags$ol(
+            style = "font-size: 0.85em; padding-left: 20px; margin-bottom: 10px;",
+            tags$li(tags$strong("Import Data:"), " Upload learning file (required) and validation file (optional)"),
+            tags$li(tags$strong("Select Variables:"), " Filter out variables with too many missing values"),
+            tags$li(tags$strong("Transform Data:"), " Handle missing values and apply transformations"),
+            tags$li(tags$strong("Statistical Tests:"), " Select discriminant features"),
+            tags$li(tags$strong("Train Model:"), " Choose and optimize a classifier"),
+            tags$li(tags$strong("Evaluate:"), " Check performance metrics and ROC curves")
+          ),
+          p(style = "font-size: 0.8em; color: gray; margin-bottom: 0;",
+            icon("info-circle"), " Use the Analysis Preset above for recommended settings")
+        )
+      ),
+
+      # Performance Settings (collapsible)
+      conditionalPanel(
+        condition = "input.show_performance_settings",
+        wellPanel(
+          style = "background-color: #f0f0f0; border-left: 4px solid #607d8b;",
+          h5("⚙️ Performance Settings", style = "margin-top: 0;"),
+          checkboxInput("enable_parallel_processing",
+                        "Enable parallel processing",
+                        value = FALSE),
+          conditionalPanel(
+            condition = "input.enable_parallel_processing",
+            sliderInput("n_cores_parallel",
+                        "Number of CPU cores:",
+                        min = 1,
+                        max = parallel::detectCores(),
+                        value = max(1, parallel::detectCores() - 1),
+                        step = 1),
+            p(style = "font-size: 0.85em; color: gray;",
+              sprintf("Your system has %d cores available", parallel::detectCores()))
+          ),
+          p(style = "font-size: 0.8em; color: gray; margin-bottom: 0;",
+            icon("bolt"), " Parallel processing speeds up grid search, bootstrap, and cross-validation")
+        )
+      ),
+      actionButton("show_performance_settings",
+                   ifelse(!is.null(input$show_performance_settings) && input$show_performance_settings %% 2 == 1,
+                          "Hide Performance Settings",
+                          "Show Performance Settings"),
+                   style = "width: 100%; margin-bottom: 10px; background-color: #607d8b; color: white;",
+                   icon = icon("cog")),
+
+      wellPanel(
         conditionalPanel(condition ="input.confirmdatabutton==0" ,
                          radioButtons("analysis","",c("new analysis","previous analysis"),inline=T),
                          conditionalPanel( condition="input.analysis=='previous analysis' ",     
@@ -151,7 +232,43 @@ shinyUI(fluidPage(
                                                                column(7,imageOutput("image3",width = "100%")))
                                             ),
                                             dataTableOutput("JDDlearn")%>% withSpinner(color="#0dc5c1",type = 1),
-                                            p(downloadButton("downloaddataJDDlearn","Download dataset"),align="center")
+                                            p(downloadButton("downloaddataJDDlearn","Download dataset"),align="center"),
+
+                                            # Data Quality Validation
+                                            hr(),
+                                            h4("✓ Data Quality Validation", style = "color: #2c3e50; margin-top: 20px;"),
+                                            fluidRow(
+                                              column(3,
+                                                     actionButton("run_validation",
+                                                                  label = "Validate Data Quality",
+                                                                  icon = icon("check-circle"),
+                                                                  style = "background-color: #3498db; color: white; width: 100%;"),
+                                                     br(), br(),
+                                                     conditionalPanel(condition = "output.validation_complete",
+                                                                      uiOutput("validation_summary"))
+                                              ),
+                                              column(9,
+                                                     conditionalPanel(condition = "output.validation_complete",
+                                                                      tabsetPanel(id = "validation_tabs",
+                                                                                  tabPanel("Issues",
+                                                                                           br(),
+                                                                                           uiOutput("validation_issues_ui")
+                                                                                  ),
+                                                                                  tabPanel("Details",
+                                                                                           br(),
+                                                                                           verbatimTextOutput("validation_details")
+                                                                                  ),
+                                                                                  tabPanel("Report",
+                                                                                           br(),
+                                                                                           p("Download detailed validation report:"),
+                                                                                           downloadButton("download_validation_report",
+                                                                                                          "Download HTML Report",
+                                                                                                          style = "width: 200px;")
+                                                                                  )
+                                                                      )
+                                                     )
+                                              )
+                                            )
                                    ),
                                    tabPanel("Validation Data", icon = icon("check"),
                                             conditionalPanel(condition ="output.fileUploadedval",
@@ -699,6 +816,89 @@ shinyUI(fluidPage(
                                             )
                                             ,
                                             hr(),
+
+                                            # Advanced Model Options (AutoML & Ensemble)
+                                            h4("🚀 Advanced Model Options", style = "color: #2c3e50; margin-top: 20px;"),
+                                            fluidRow(
+                                              column(6,
+                                                     wellPanel(
+                                                       style = "background-color: #e8f5e9; border-left: 4px solid #4caf50;",
+                                                       h5("🤖 AutoML - Automatic Model Selection"),
+                                                       p("Automatically test multiple models and select the best one."),
+                                                       numericInput("automl_time_budget",
+                                                                    "Time budget (minutes):",
+                                                                    value = 15,
+                                                                    min = 5,
+                                                                    max = 120,
+                                                                    step = 5),
+                                                       checkboxGroupInput("automl_models",
+                                                                          "Models to test:",
+                                                                          choices = c(
+                                                                            "Random Forest" = "randomforest",
+                                                                            "XGBoost" = "xgboost",
+                                                                            "SVM" = "svm",
+                                                                            "ElasticNet" = "elasticnet",
+                                                                            "KNN" = "knn"
+                                                                          ),
+                                                                          selected = c("randomforest", "xgboost", "svm", "elasticnet")),
+                                                       actionButton("run_automl",
+                                                                    label = "Run AutoML",
+                                                                    icon = icon("magic"),
+                                                                    style = "background-color: #4caf50; color: white; width: 100%;"),
+                                                       br(), br(),
+                                                       uiOutput("automl_status")
+                                                     )
+                                              ),
+                                              column(6,
+                                                     wellPanel(
+                                                       style = "background-color: #e3f2fd; border-left: 4px solid #2196f3;",
+                                                       h5("🎯 Ensemble - Combine Multiple Models"),
+                                                       p("Combine predictions from multiple models for better accuracy."),
+                                                       selectInput("ensemble_method",
+                                                                   "Ensemble method:",
+                                                                   choices = c(
+                                                                     "Voting (Majority)" = "voting",
+                                                                     "Weighted Voting" = "weighted_voting",
+                                                                     "Averaging (Probabilities)" = "averaging",
+                                                                     "Weighted Averaging" = "weighted_averaging",
+                                                                     "Stacking (Meta-learner)" = "stacking"
+                                                                   ),
+                                                                   selected = "averaging"),
+                                                       checkboxGroupInput("ensemble_models",
+                                                                          "Models to combine:",
+                                                                          choices = c(
+                                                                            "Random Forest" = "randomforest",
+                                                                            "XGBoost" = "xgboost",
+                                                                            "SVM" = "svm",
+                                                                            "ElasticNet" = "elasticnet"
+                                                                          ),
+                                                                          selected = c("randomforest", "xgboost")),
+                                                       actionButton("create_ensemble",
+                                                                    label = "Create Ensemble",
+                                                                    icon = icon("layer-group"),
+                                                                    style = "background-color: #2196f3; color: white; width: 100%;"),
+                                                       br(), br(),
+                                                       uiOutput("ensemble_status")
+                                                     )
+                                              )
+                                            ),
+                                            conditionalPanel(condition = "output.automl_complete || output.ensemble_complete",
+                                                             hr(),
+                                                             h4("📊 Advanced Model Results"),
+                                                             fluidRow(
+                                                               column(12,
+                                                                      conditionalPanel(condition = "output.automl_complete",
+                                                                                       h5("AutoML Results:"),
+                                                                                       tableOutput("automl_results_table"),
+                                                                                       br()),
+                                                                      conditionalPanel(condition = "output.ensemble_complete",
+                                                                                       h5("Ensemble Results:"),
+                                                                                       tableOutput("ensemble_results_table"))
+                                                               )
+                                                             )
+                                            ),
+
+                                            hr(),
                                             conditionalPanel(condition ="input.model!='nomodel'  ",
                                                              fluidRow(
                                                                column(4,
@@ -880,6 +1080,68 @@ shinyUI(fluidPage(
                                                                           h5("💡 Suggestions to Reduce Overfitting:"),
                                                                           uiOutput("overfitting_suggestions_text")
                                                                       )
+                                                               )
+                                                             )
+                                            ),
+
+                                            # Model Interpretability Section
+                                            hr(),
+                                            h4("🔍 Model Interpretation", style = "color: #2c3e50; margin-top: 20px;"),
+                                            p("Understand your model's predictions using SHAP values and feature importance analysis."),
+                                            fluidRow(
+                                              column(4,
+                                                     wellPanel(
+                                                       style = "background-color: #e8f5e9; border-left: 4px solid #4caf50;",
+                                                       h5("📊 SHAP Analysis"),
+                                                       p("Calculate SHAP (SHapley Additive exPlanations) values to understand feature contributions to predictions."),
+                                                       numericInput("shap_nsim", "Number of simulations:", value = 50, min = 10, max = 500, step = 10),
+                                                       numericInput("shap_sample_size", "Background sample size:", value = 100, min = 10, max = 500, step = 10),
+                                                       actionButton("calculate_shap",
+                                                                    label = "Calculate SHAP Values",
+                                                                    icon = icon("chart-bar"),
+                                                                    style = "background-color: #4caf50; color: white; width: 100%;")
+                                                     )
+                                              ),
+                                              column(4,
+                                                     wellPanel(
+                                                       style = "background-color: #e3f2fd; border-left: 4px solid #2196f3;",
+                                                       h5("🎯 Permutation Importance"),
+                                                       p("Calculate permutation-based feature importance by measuring accuracy drop when features are shuffled."),
+                                                       numericInput("perm_n_repeats", "Number of repeats:", value = 10, min = 3, max = 50, step = 5),
+                                                       actionButton("calculate_permutation",
+                                                                    label = "Calculate Permutation Importance",
+                                                                    icon = icon("random"),
+                                                                    style = "background-color: #2196f3; color: white; width: 100%;")
+                                                     )
+                                              ),
+                                              column(4,
+                                                     wellPanel(
+                                                       style = "background-color: #fff3e0; border-left: 4px solid #ff9800;",
+                                                       h5("📄 Export Results"),
+                                                       p("Generate comprehensive interpretation report with all explanations."),
+                                                       conditionalPanel(condition = "output.interpretation_ready",
+                                                                        uiOutput("interpretation_status"),
+                                                                        br(),
+                                                                        downloadButton("download_interpretation_report",
+                                                                                       "Download HTML Report",
+                                                                                       style = "width: 100%;")
+                                                       )
+                                                     )
+                                              )
+                                            ),
+                                            conditionalPanel(condition = "output.interpretation_ready",
+                                                             fluidRow(
+                                                               column(6,
+                                                                      h5("Feature Importance Plot"),
+                                                                      plotOutput("plot_interpretation_importance", height = 400) %>% withSpinner(color="#0dc5c1",type = 1),
+                                                                      br(),
+                                                                      downloadButton("download_importance_plot", "Download Plot")
+                                                               ),
+                                                               column(6,
+                                                                      h5("Top Features Table"),
+                                                                      tableOutput("table_interpretation_features"),
+                                                                      br(),
+                                                                      downloadButton("download_importance_table", "Download Table")
                                                                )
                                                              )
                                             )
