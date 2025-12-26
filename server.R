@@ -4,6 +4,10 @@ source("global.R")
 #options(xtable.include.rownames=T)
 
 shinyServer(function(input, output,session) {
+
+  # Load server enhancements for new modules
+  source("server_enhancements.R", local = TRUE)
+
   #if(requireNamespace("superml", quietly = TRUE)) {
     #attachNamespace("superml")
   #}

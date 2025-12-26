@@ -239,6 +239,69 @@ shinyUI(fluidPage(
                                                                       radioButtons("logtype",label = NULL,c("ln"="logn","log 10"="log10","log2"="log2"),inline = TRUE)))
                                             ),p(downloadButton('downloaddatatransform', 'Download transform data '),align="center"),
                                             hr(),
+
+                                            # Class Imbalance Handling (SMOTE)
+                                            h4("⚖️ Handle Class Imbalance", style = "color: #2c3e50; margin-top: 20px;"),
+                                            fluidRow(
+                                              column(3,
+                                                     checkboxInput("enable_smote", "Enable class balancing", FALSE),
+                                                     conditionalPanel(condition = "input.help",
+                                                                      helpText("Activate to handle imbalanced datasets where one class has significantly more samples than others."))
+                                              ),
+                                              column(9,
+                                                     conditionalPanel(condition = "input.enable_smote",
+                                                                      fluidRow(
+                                                                        column(4,
+                                                                               selectInput("smote_method", "Balancing Method:",
+                                                                                           choices = c(
+                                                                                             "Auto (Recommended)" = "auto",
+                                                                                             "SMOTE (Synthetic Oversampling)" = "smote",
+                                                                                             "ADASYN (Adaptive Synthetic)" = "adasyn",
+                                                                                             "Random Oversampling" = "oversample",
+                                                                                             "Random Undersampling" = "undersample",
+                                                                                             "Hybrid (SMOTE + Undersampling)" = "hybrid"
+                                                                                           ),
+                                                                                           selected = "auto"),
+                                                                               conditionalPanel(condition = "input.help",
+                                                                                                helpText("Auto: automatically selects method based on imbalance severity."),
+                                                                                                helpText("SMOTE: creates synthetic minority samples by interpolation."),
+                                                                                                helpText("ADASYN: adapts synthetic sample generation to local density."),
+                                                                                                helpText("Hybrid: combines SMOTE with majority undersampling."))
+                                                                        ),
+                                                                        column(4,
+                                                                               radioButtons("smote_apply_to", "Apply to:",
+                                                                                            choices = c(
+                                                                                              "Training only (Recommended)" = "train",
+                                                                                              "Validation only" = "validation",
+                                                                                              "Both train & validation" = "both"
+                                                                                            ),
+                                                                                            selected = "train"),
+                                                                               conditionalPanel(condition = "input.help",
+                                                                                                helpText("⚠️ Recommended: Apply only to training to avoid data leakage."))
+                                                                        ),
+                                                                        column(4,
+                                                                               actionButton("apply_smote", "Apply Balancing",
+                                                                                            style = "margin-top: 25px; background-color: #3498db; color: white;"),
+                                                                               br(), br(),
+                                                                               uiOutput("smote_status")
+                                                                        )
+                                                                      )
+                                                     )
+                                              )
+                                            ),
+                                            conditionalPanel(condition = "input.enable_smote && output.smote_applied",
+                                                             fluidRow(
+                                                               column(6,
+                                                                      h5("Class Distribution Before/After"),
+                                                                      plotOutput("plot_smote_distribution", height = 300) %>% withSpinner(color="#0dc5c1",type = 1)
+                                                               ),
+                                                               column(6,
+                                                                      h5("Balancing Summary"),
+                                                                      tableOutput("table_smote_summary")
+                                                               )
+                                                             )
+                                            ),
+                                            hr(),
                                             
                                             fluidRow(
                                               column(5,plotOutput("plotheatmaptransformdata" ,width = "100%",height = 500)%>% withSpinner(color="#0dc5c1",type = 1),
@@ -761,7 +824,65 @@ shinyUI(fluidPage(
                                                                                        
                                                                                 )
                                                                               )
+                                                             ),
+
+                                            # Model Export & Reporting
+                                            hr(),
+                                            h4("📤 Export & Reporting", style = "color: #2c3e50; margin-top: 20px;"),
+                                            fluidRow(
+                                              column(4,
+                                                     h5("📊 Generate Analysis Report"),
+                                                     p("Create comprehensive HTML report with all analysis steps and results."),
+                                                     actionButton("generate_report",
+                                                                  label = "Generate HTML Report",
+                                                                  icon = icon("file-alt"),
+                                                                  style = "background-color: #27ae60; color: white; width: 100%;"),
+                                                     br(), br(),
+                                                     conditionalPanel(condition = "output.report_ready",
+                                                                      downloadButton("download_report", "Download Report",
+                                                                                     style = "width: 100%;"))
+                                              ),
+                                              column(4,
+                                                     h5("💾 Export Model"),
+                                                     p("Export trained model to deployment formats (PMML, RDS, JSON)."),
+                                                     checkboxGroupInput("export_formats", "Select formats:",
+                                                                        choices = c(
+                                                                          "RDS (R native + metadata)" = "rds",
+                                                                          "PMML (cross-platform)" = "pmml",
+                                                                          "JSON (configuration)" = "json"
+                                                                        ),
+                                                                        selected = c("rds")),
+                                                     actionButton("export_model_btn",
+                                                                  label = "Export Model",
+                                                                  icon = icon("download"),
+                                                                  style = "background-color: #2980b9; color: white; width: 100%;"),
+                                                     br(), br(),
+                                                     uiOutput("export_status")
+                                              ),
+                                              column(4,
+                                                     h5("🔍 Overfitting Analysis"),
+                                                     uiOutput("overfitting_alert"),
+                                                     br(),
+                                                     conditionalPanel(condition = "output.overfitting_detected",
+                                                                      plotOutput("plot_overfitting", height = 200) %>% withSpinner(color="#0dc5c1",type = 1),
+                                                                      br(),
+                                                                      actionButton("show_overfitting_suggestions",
+                                                                                   label = "Show Improvement Suggestions",
+                                                                                   icon = icon("lightbulb"),
+                                                                                   style = "width: 100%;"))
+                                              )
+                                            ),
+                                            conditionalPanel(condition = "input.show_overfitting_suggestions > 0",
+                                                             fluidRow(
+                                                               column(12,
+                                                                      div(class = "well",
+                                                                          style = "background-color: #fff3cd; border-left: 4px solid #ffc107;",
+                                                                          h5("💡 Suggestions to Reduce Overfitting:"),
+                                                                          uiOutput("overfitting_suggestions_text")
+                                                                      )
+                                                               )
                                                              )
+                                            )
                                             )
                                    ) # fin Model 
                                    ,
